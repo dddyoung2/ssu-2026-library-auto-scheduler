@@ -58,12 +58,32 @@
 
 ## 📂 프로젝트 구조
 ```
-project/
-├── src/            # 소스 코드
-├── models/         # AI 모델 관련
-├── tests/           # 데이터셋
-├── docs/           # 문서
-└── README.md
+ssu-2026-library-auto-scheduler/
+├── .github/                     # GitHub 설정 및 자동화
+│   ├── pull_request_template.md # PR 템플릿
+│   └── workflows/
+│       └── ci.yml               # CI 워크플로우
+├── data/                        # 데이터 저장소
+│   └── exports/                 # 근로표 엑셀 등 산출물 저장
+├── docs/                        # 프로젝트 관련 문서 파일
+│   ├── architecture.md          # 시스템 아키텍처 문서
+│   ├── components.md            # 폴더/파일별 책임 및 의존 관계 문서
+│   ├── spec.md                  # 기능 명세 문서
+│   └── team-tasks.md            # 팀 역할 및 작업 분담 문서
+├── src/                         # 소스 코드
+│   ├── core/                    # 스케줄링·업무 로직
+│   ├── db/                      # Supabase/DB 접근 계층
+│   ├── pages/                   # Streamlit 페이지
+│   └── utils/                   # 공통 유틸리티
+├── tests/                       # 테스트 코드
+├── .env.example                 # 환경변수 파일 양식
+├── .gitignore                   # 깃허브 업로드 금지 명시 파일
+├── AGENTS.md                    # AI-Agent(CODEX) 전용 규칙 문서
+├── CHANGELOG.md                 # 변경 이력
+├── CLAUDE.md                    # AI-Agent(Claude Code) 전용 규칙 문서
+├── CONTRIBUTING.md              # 규칙 규정 파일
+├── requirements.txt             # 의존성 파일
+└── README.md                    # 프로젝트 개요
 ```
 ---
 
