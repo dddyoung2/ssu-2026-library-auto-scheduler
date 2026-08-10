@@ -17,9 +17,10 @@
 |---|---|---|
 | 송민호 | 프론트엔드 및 규칙 알고리즘 설계 | [![Github](https://img.shields.io/badge/minhosong-181717?style=flat&logo=github&logoColor=white)](https://github.com/minhosong-mse) |
 | 김도영 | DB 설계 및 AI 엔지니어링 | [![Github](https://img.shields.io/badge/dddyoung2-181717?style=flat&logo=github&logoColor=white)](https://github.com/dddyoung2) |
-## 🧩 핵심 기능
 
 ---
+
+## 🧩 핵심 기능
 
 | 기능명 | 설명 |
 |---|---|
