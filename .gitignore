@@ -8,8 +8,13 @@ __pycache__/
 .env.*
 !.env.example
 
-# Streamlit
+# Streamlit secret
 .streamlit/secrets.toml
+
+# Supabase CLI 로컬 임시 파일
+supabase/.branches
+supabase/.temp
+supabase/.env
 
 # IDE
 .vscode/
