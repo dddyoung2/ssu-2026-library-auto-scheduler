@@ -105,3 +105,6 @@ Commit Message 예시:
 |---|---|
 |레포지토리 생성|`git clone <repo-URL>`|
 |최근 작업 불러오기|`git pull origin main`|
+|branch 생성 및 이동|`git branch -c <type>/<short-description>`|
+|작업 단위 깃허브에 업로드|`git push -u origin <branch-name>`|
+|local branch delete|`git branch -d <branch-name>`|

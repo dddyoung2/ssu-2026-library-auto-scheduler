@@ -1,102 +1,105 @@
 # ssu-2026-library-auto-scheduler
 도서관 교내 근로를 디지털틱하게 빠르고, 간편하게
 
+> v3 (방향 전환): 기존 Streamlit/Supabase(BaaS)/OR-Tools/OpenAI 계획을 폐기하고, 검증된 프로토타입(FastAPI + SQLite)을 그대로 기반으로 삼는다. 범위도 **전체 시간표 생성 → 데스크 시간표 생성 → 엑셀 다운로드**까지로 축소한다.
+> v3.1 (사실상 최종본): 다중 관리자 계정(`data/admins.csv`), 학생 개별 등록/수정, 생성 전 "전원 제출완료" 체크가 추가됨. DB는 **Supabase PostgreSQL을 순수 DB 호스팅으로 연결**하면 구현 종료(Auth/RLS 미사용). 배포는 **Render.com**(서비스명 `lissurary`, Singapore, Starter 플랜) — Streamlit Community Cloud는 사용하지 않는다. 자세한 내용은 `docs/spec.md`, `docs/architecture.md` 참고.
+
 ---
 
-## 📌 개요
+## 개요
 
-- **프로젝트명:** Library Auto Scheduler
+- **프로젝트명:** Lissurary (구 Library Auto Scheduler)
 - **참여 대회/목적:** 숭실대 AI 업무 혁신 챌린지 (2026)
-- **핵심 기능 요약:** 도서관 근로장학생 근로표 작성 업무를, LLM과 최적화 알고리즘(OR-Tools)으로 자동화하는 스케줄링 시스템
+- **핵심 기능 요약:** 도서관 근로장학생의 희망 스케줄(1~3순위)을 취합해, 스왑 휴리스틱 알고리즘으로 전체 근로표와 데스크 근로표를 자동 생성하고 엑셀로 내려받는 웹 애플리케이션
 
 ---
 
-## 👥 팀 (Contributors)
+## 팀 (Contributors)
 
 | 이름 | 역할 | GitHub |
 |---|---|---|
-| 송민호 | 프론트엔드 및 규칙 알고리즘 설계 | [![Github](https://img.shields.io/badge/minhosong-181717?style=flat&logo=github&logoColor=white)](https://github.com/minhosong-mse) |
+| 송민호 | **팀장**, 프론트엔드 및 규칙 알고리즘 설계 | [![Github](https://img.shields.io/badge/minhosong-181717?style=flat&logo=github&logoColor=white)](https://github.com/minhosong-mse) |
 | 김도영 | DB 설계 및 AI 엔지니어링 | [![Github](https://img.shields.io/badge/dddyoung2-181717?style=flat&logo=github&logoColor=white)](https://github.com/dddyoung2) |
 
 ---
 
-## 🧩 핵심 기능
+## 핵심 기능
 
 | 기능명 | 설명 |
 |---|---|
-| 근로생 – 분기 단위 희망 근로표 입력 | 강의시간·개인불가·1~3지망을 드롭다운 폼으로 구조화하여 입력 (자유 서술 없음) |
-| 근로생 – 주간 특별 스케줄 입력 | 고정 포맷(추가/제외, 일자, 시간, 사유)으로 입력. 시험기간 등 특별 추가근무 신청도 이 기능으로 처리 |
-| 근로생 – 생성된 근로표 확인 | 로그인 계정 기준 본인 근로 시간대만 자동 필터링되어 표시 |
-| 관리자 – 근로 기간 대상 명단 업로드 | 학기+방학 근로 대상자 명단 업로드·저장 (데이터 파이프라인 시작점) |
-| 관리자 – 단위 근로표 생성 및 확인 | 조건 충족 근로표 자동 생성, 수동 수정/확정/배포 |
-| 관리자 – 주간 데스크 근로표 생성 및 확인 | 분기 근로표 + 주간 특이사항 기반 데스크표 생성·배포 |
-| 근로생 – 근로표 수정 요청 (1회) | 배포된 확정 근로표에 대해 1회 한정 수정 요청 제출 |
-| 관리자 – 근로일정(영업시간/공휴일) 설정 | 총 근로일, 학기중/방학중 근로일 설정. 공휴일 불러오기: 설정된 근로기간(학기+방학) 중 선택한 분기(학기 또는 방학) 범위만 공공데이터포털 특일정보 API로 조회해 자동 반영 (수기 추가/수정도 병행 가능) → 학생 입력 폼·근로표 생성 로직에 자동 반영되어 해당 일정 제한 |
-| 관리자 – 단위 스케줄표 제출 확인 | 근로생별 제출 여부 확인 + 스케줄표 미리보기 |
-| 관리자 – 주간 스케줄 수정 요청 확인 | 추가/제외 요청 확인, 사유 검토 후 승인·거절 |
-| 관리자 – 근로표 엑셀 다운로드 | 확정된 분기/주간 근로표를 엑셀 파일로 다운로드 |
+| 근로생 – 로그인 | 이름 + 학번으로 로그인 |
+| 근로생 – 근로유형 선택 | A형(월 56~80h)/B형(월 28~40h) 선택·저장 |
+| 근로생 – 희망 스케줄 입력 | 요일×시간 그리드에서 1~3순위/불가능/수업 입력(PC 드래그, 모바일 터치 드래그), 연속 4시간 제한 검증, 임시저장/최종 제출 |
+| 관리자 – 명단 관리 | CSV 업로드(merge/sync 모드) · 개별 학생 등록/수정 · 40명 더미데이터 생성, 학생별 제출 상태·근로유형 조회/수정 |
+| 관리자 – 전체 시간표 생성 | 활성 학생 전원 최종제출+유형지정 완료 확인 → 시간당 최소 인원 설정 → 1순위 전량 배정 후 부족분만 2·3순위와 스왑하는 휴리스틱으로 자동 생성 |
+| 관리자 – 데스크 시간표 생성 | 전체 시간표 기준으로 A/B형 주간·일일 데스크 상한, 2인 허용 시간대를 반영해 자동 생성(2시간 블록 우선) |
+| 관리자 – 결과 다운로드 | 전체시간표/데스크시간표/학생별요약/생성정보 4개 시트 엑셀 다운로드 |
+
+**이번 버전에서 하지 않는 것** (follow-up, `docs/spec.md` 9번 참고): 근로표 확정/배포 워크플로우, 주간 추가·제외 요청, 수정요청·이의제기, LLM 연동, 상태 대시보드, 공휴일 API 연동, 학기/방학별 영업시간 차등.
 
 ---
 
-## 🏗️ 시스템 아키텍처
+## 시스템 아키텍처
 
-*(계획서에서 작성한 데이터 흐름도/구조도를 그대로 재사용. 프론트엔드-백엔드-AI모델-DB 흐름을 이미지로 첨부)*
-
-<!-- 아키텍처 다이어그램 이미지 삽입 -->
+FastAPI(웹 서버) + Jinja2(서버사이드 템플릿) + SQLAlchemy(SQLite 로컬 / Postgres 운영) + openpyxl(엑셀 출력) 구조. 상세 계층 구조는 `docs/architecture.md` 참고.
 
 ---
 
-## 🛠️ 기술 스택
+## 기술 스택
 
-**Frontend**
-- Streamlit
+**Web / Backend**
+- FastAPI, Uvicorn, Starlette(SessionMiddleware)
 
-**Backend**
-- Supabase, Google OR-Tools
+**DB**
+- SQLAlchemy — SQLite(로컬) / PostgreSQL(운영, Supabase — 순수 DB 호스팅, Auth/RLS 미사용)
 
-**AI / 모델**
-- OpenAI LLM API
+**프론트**
+- Jinja2 서버사이드 템플릿 + 바닐라 JS/CSS
 
-**Database / Infra**
-- Supabase
+**엑셀 출력**
+- openpyxl
 
-** Deployment **
-- Streamlit Community Cloud
+**배포**
+- Render.com (서비스명 `lissurary`, Singapore 리전, Starter 플랜, `/health` 헬스체크). Streamlit Community Cloud는 사용하지 않음
 
 ---
 
-## 📂 프로젝트 구조
+## 프로젝트 구조
 ```
 ssu-2026-library-auto-scheduler/
 ├── .github/                     # GitHub 설정 및 자동화
 │   ├── pull_request_template.md # PR 템플릿
 │   └── workflows/
 │       └── ci.yml               # CI 워크플로우
-├── data/                        # 데이터 저장소
-│   └── exports/                 # 근로표 엑셀 등 산출물 저장
-├── docs/                        # 프로젝트 관련 문서 파일
+├── app/                          # 애플리케이션 코드
+│   ├── main.py                   # FastAPI 라우트/API
+│   ├── config.py                 # 영업시간·상태코드·환경변수 등 상수
+│   ├── database.py               # SQLAlchemy 모델 및 DB 접근
+│   ├── validators.py             # 스케줄 검증
+│   ├── demo_scheduler.py         # 전체/데스크 시간표 생성 알고리즘
+│   ├── exports.py                # 엑셀 워크북 생성
+│   ├── templates/                # Jinja2 HTML 템플릿
+│   └── static/                   # JS/CSS
+├── data/                          # 로컬 시드 명단, SQLite DB, 산출물
+├── docs/                          # 프로젝트 관련 문서 파일
 │   ├── architecture.md          # 시스템 아키텍처 문서
 │   ├── components.md            # 폴더/파일별 책임 및 의존 관계 문서
 │   ├── spec.md                  # 기능 명세 문서
 │   └── team-tasks.md            # 팀 역할 및 작업 분담 문서
-├── src/                         # 소스 코드
-│   ├── core/                    # 스케줄링·업무 로직
-│   ├── db/                      # Supabase/DB 접근 계층
-│   ├── pages/                   # Streamlit 페이지
-│   └── utils/                   # 공통 유틸리티
-├── tests/                       # 테스트 코드
+├── tests/                        # 테스트 코드
 ├── .env.example                 # 환경변수 파일 양식
 ├── .gitignore                   # 깃허브 업로드 금지 명시 파일
 ├── AGENTS.md                    # AI-Agent(CODEX) 전용 규칙 문서
 ├── CHANGELOG.md                 # 변경 이력
 ├── CLAUDE.md                    # AI-Agent(Claude Code) 전용 규칙 문서
 ├── CONTRIBUTING.md              # 규칙 규정 파일
+├── render.yaml                  # Render.com 배포 설정
 ├── requirements.txt             # 의존성 파일
 └── README.md                    # 프로젝트 개요
 ```
 ---
 
-## ⚙️ 설치 방법 (Installation)
+## 설치 방법 (Installation)
 
 ### 저장소 클론
 
@@ -108,7 +111,7 @@ cd {repo}
 ### 가상 환경(venv)
 #### Install
 ``` bash
-py -3.12 -m venv .venv
+py -3.10 -m venv .venv
 ```
 
 #### Execute
@@ -130,27 +133,56 @@ pip install -r requirements.txt
 
 ---
 
-## ▶️ 실행 방법 (Usage)
+## 실행 방법 (Usage)
 
 ```bash
-python src/app.py
+uvicorn app.main:app --reload
 ```
-또는 [Link]()이용
+브라우저: `http://127.0.0.1:8000`
+
+**관리자 계정**은 CSV 파일로 관리합니다(개수 제한 없음, 로그인마다 파일을 다시 읽으므로 서버 재시작 불필요). 파일 위치는 다음 순서로 결정됩니다: ①환경변수 `ADMINS_CSV_PATH` ②Render Secret File(`/etc/secrets/admins.csv`, 파일이 존재하면 자동 사용) ③로컬 `data/admins.csv`.
+
+```csv
+user_id,password,active
+admin01,Admin1234!,1
+admin02,Admin2345!,1
+```
+- `active`가 `1`이면 로그인 가능, `0`이면 비활성(이미 로그인 중이어도 다음 요청에서 즉시 세션 해제)
+- ⚠️ 비밀번호가 평문으로 들어 있으므로 `data/admins.csv`는 공개 저장소에 절대 커밋하지 않습니다(`.gitignore` 대상). **운영(Render) 배포에서는 로컬 CSV 대신 Render Secret File로 관리**합니다 — Render 서비스 → `Environment` → `Secret Files`에 파일명 `admins.csv`로 등록
+- CSV가 없거나 활성 계정이 하나도 없을 때만 아래 환경변수(`ADMIN_ID`/`ADMIN_PASSWORD`, `ADMIN2_ID`/`ADMIN2_PASSWORD`)를 fallback으로 사용합니다 — 단, 기본값이 없으므로 값을 직접 설정하지 않으면 로그인 가능한 관리자가 아예 없는 상태가 됩니다
 
 ---
 
-## 🔑 환경 변수 설정
+## 환경 변수 설정
 
 `.env.example` 파일을 참고하여 `.env` 파일을 생성하세요.
 
 ```env
-API_KEY=your_api_key_here
-DB_URL=your_db_url_here
+# 비워 두면 SQLite(data/app.db)를 사용합니다.
+# 운영에서는 Supabase 프로젝트의 Session pooler 연결 문자열(포트 5432)을 권장합니다.
+# 예: postgres://postgres.PROJECT_REF:DB_PASSWORD@aws-REGION.pooler.supabase.com:5432/postgres
+DATABASE_URL=
+SESSION_SECRET=change-this-to-a-long-random-string
+COOKIE_SECURE=false
+
+# 관리자 계정은 기본적으로 admins.csv(로컬 data/admins.csv 또는 Render Secret File)를 사용합니다.
+# 아래 값은 그 CSV를 사용할 수 없을 때만 fallback으로 쓰이며, 기본값이 없으므로 운영에서는 보통 비워둡니다.
+ADMIN_ID=
+ADMIN_PASSWORD=
+ADMIN2_ID=
+ADMIN2_PASSWORD=
 ```
+
+### Supabase + Render 배포 요약 (운영)
+1. Supabase에서 새 프로젝트 생성 → `Connect` → **Session pooler** 연결 문자열 복사
+2. Render → `New` → `Blueprint` → 저장소의 `render.yaml` 선택 → `DATABASE_URL`에 Supabase 연결 문자열 입력 → 배포(앱 기동 시 테이블 자동 생성)
+3. Render 서비스 → `Environment` → `Secret Files` → 파일명 `admins.csv`로 관리자 계정 등록
+4. 배포 후 `/health` 확인 → 관리자 로그인 → 학생 등록(개별 또는 CSV) → 학생 로그인/제출 테스트 → 더미 40명으로 자동배정 테스트
+5. Supabase Free 플랜은 장기간 미사용 시 프로젝트가 일시정지될 수 있으므로, 상시 접속이 필요하면 유료 플랜 고려
 
 ---
 
-## 📊 성능 / 벤치마크
+## 성능 / 벤치마크
 
 *(계획서의 "정량적 목표" 대신, 실제 측정된 결과 수치로 대체)*
 
