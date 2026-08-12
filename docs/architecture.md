@@ -35,7 +35,8 @@
 - `DATABASE_URL`을 비워두면 자동으로 `sqlite:///data/app.db` 사용
 
 **운영(프로덕션) 환경**
-- Render.com Web Service(`render.yaml`에 정의, `New → Blueprint`로 저장소 연결): `pip install -r requirements.txt` → `uvicorn app.main:app --host 0.0.0.0 --port $PORT`. 서비스명 `lissurary`, Singapore 리전, Starter 플랜(유휴 시 꺼지지 않는 상시 실행)
+- Render.com Web Service(`render.yaml`에 정의, `New → Blueprint`로 저장소 연결): `pip install -r requirements.txt` → `uvicorn app.main:app --host 0.0.0.0 --port $PORT`. 서비스명 `lissurary`, Singapore 리전
+- ⚠️ **현재 `render.yaml`은 테스트 단계라 `plan: free`로 임시 설정**(결제 없이 배포·기능 검증용). 유휴 시 자동으로 서버가 꺼졌다가 다음 요청에서 자동으로 다시 켜짐(수동 재시작 불필요, 첫 요청만 콜드 스타트로 수십 초 지연) — DB(Supabase)는 별도라 데이터 유실 없음. 실사용(40명 상시 접속) 전에는 반드시 `plan: starter`로 되돌릴 것(8번 "중요한 설계 결정" 참고)
 - DB는 **Supabase 프로젝트의 PostgreSQL**(`DATABASE_URL`에 Supabase 연결 문자열을 수동 설정, `postgres://`/`postgresql://` prefix는 앱 기동 시 `postgresql+psycopg://`로 자동 변환). **Session pooler 연결 문자열(포트 5432)을 권장** — Render 등 서버리스가 아닌 상시 서비스에서 접속 안정성이 높음. Render 자체 Postgres 애드온은 쓰지 않음
 - 운영 DB는 초기에 비어 있음(자동 시드 없음) — 최초 배포 후 관리자가 로그인해 학생을 등록해야 함
 - 관리자 계정은 **Render Secret File**로 관리: `Environment → Secret Files`에 파일명 `admins.csv` 등록 → 앱에서 `/etc/secrets/admins.csv`로 접근(4번 참고). 로컬 `data/admins.csv`는 개발/테스트용으로만 사용
