@@ -1,0 +1,166 @@
+{% extends "base.html" %}
+{% block header_actions %}
+<form method="post" action="/logout"><button class="btn ghost small" type="submit">로그아웃</button></form>
+{% endblock %}
+{% block content %}
+<section class="student-head">
+  <div><p class="eyebrow">내 근로 가능시간 입력하기</p><h1>{{ student.name }} <span class="student-no">{{ student.student_no }}</span></h1></div>
+  <div id="saveState" class="save-state">불러오는 중</div>
+</section>
+
+<section class="card work-type-card">
+  <div>
+    <p class="eyebrow">근로유형 선택</p>
+    <h2>A형 또는 B형을 선택해 주세요.</h2>
+    <p class="muted">A형은 월 56~80시간(주 작성 권장 14~20시간), B형은 월 28~40시간(주 작성 권장 7~10시간)입니다. 주간 기준은 제출 전 안내용이며 실제 월별 근로일수에 따라 조정할 수 있습니다.</p>
+  </div>
+  <div class="work-type-controls">
+    <label>근로유형
+      <select id="studentWorkType">
+        <option value="">선택하세요</option>
+        <option value="A">A형 · 월 56~80시간 / 주 권장 14~20시간</option>
+        <option value="B">B형 · 월 28~40시간 / 주 권장 7~10시간</option>
+      </select>
+    </label>
+    <button id="saveWorkType" class="btn secondary" type="button">유형 저장</button>
+  </div>
+</section>
+
+<section class="card quick-rules">
+  <div class="section-title-row">
+    <div class="rule-icon">!</div>
+    <h2>작성 전 꼭 확인하세요</h2>
+  </div>
+  <div class="quick-rule-grid">
+    <div class="quick-rule"><strong>① 1시간 단위 작성</strong><span>근로시간은 1시간 단위로 선택하며 30분 단위 근로는 작성하지 않습니다.</span></div>
+    <div class="quick-rule"><strong>② 최대 연속 4시간</strong><span>하루 최대 8시간, 연속 근로는 최대 4시간까지 가능합니다.</span></div>
+    <div class="quick-rule"><strong>③ 우선순위 배정</strong><span>1순위 → 2순위 → 3순위 순으로 우선 배정합니다.</span></div>
+    <div class="quick-rule"><strong>④ 수업·불가능 시간</strong><span>정규 수업시간과 절대 불가능 시간에는 근로를 배정하지 않습니다.</span></div>
+    <div class="quick-rule"><strong>⑤ 미선택 시간</strong><span>미선택 시간은 해당 시간대 인원이 부족한 경우 배정될 수 있습니다.</span></div>
+    <div class="quick-rule"><strong>⑥ 수업시간 겹침</strong><span>수업이 근로 1시간 칸과 일부라도 겹치면 해당 칸 전체를 ‘수업’으로 선택합니다.</span></div>
+  </div>
+</section>
+
+<details class="card full-guide">
+  <summary>근로시간 작성 전체 안내 보기</summary>
+  <div class="guide-content">
+    <div class="guide-groups">
+      <div class="guide-group">
+        <h3>근로시간 작성 기준</h3>
+        <ul>
+          <li>근로시간은 1시간 단위로 작성하며 30분 단위 근로는 불가능합니다.</li>
+          <li>1순위, 2순위, 3순위 순서로 우선 배정합니다.</li>
+          <li>절대 불가능 시간과 정규 수업시간은 배정 대상에서 제외됩니다.</li>
+          <li>미선택 시간은 해당 시간대에 근로 가능한 학생이 부족한 경우에만 배정될 수 있습니다.</li>
+          <li>하루 실제 근로는 최대 8시간이며 연속 근로는 최대 4시간입니다.</li>
+          <li>4시간 연속 근로 시 이후 1시간의 휴게시간이 필요합니다.</li>
+        </ul>
+      </div>
+
+      <div class="guide-group">
+        <h3>시간대 배분 기준</h3>
+        <ul>
+          <li>오전·오후·평일 야간·토요일 시간이 한쪽에 지나치게 몰리지 않도록 배정합니다.</li>
+          <li>특수 시간대는 평일 09:00~10:00, 평일 야간 18:00~22:00, 토요일 09:00~15:00입니다.</li>
+          <li>A형은 특수 시간대 주 8시간, B형은 주 4시간 이상 근무를 기본 기준으로 합니다.</li>
+          <li>토요일이나 야간 신청자가 많으면 담당자가 추후 조정할 수 있습니다.</li>
+          <li>특정 요일이나 시간대에 희망자가 없는 경우 담당자가 조정하거나 당번제로 운영할 수 있습니다.</li>
+        </ul>
+      </div>
+
+      <div class="guide-group">
+        <h3>오픈·마감 및 토요일</h3>
+        <ul>
+          <li>오전 시간대에 근무하는 경우 오픈 시간인 09:00 근무가 포함되어야 합니다.</li>
+          <li>평일 야간에 근무하는 경우 마감 시간인 22:00까지의 근무가 포함되어야 합니다.</li>
+          <li>09:00 오픈 데스크 근무자는 업무용 PC 세팅 및 세미나실 예약 관리 등의 업무로 10분 조기 출근·10분 조기 퇴근하는 것을 기본으로 합니다.</li>
+          <li>시험기간에는 토요일 근로시간이 17:00까지 연장될 수 있습니다.</li>
+        </ul>
+      </div>
+
+      <div class="guide-group">
+        <h3>최종 배정 및 근태관리</h3>
+        <ul>
+          <li>학생별 전체 근로시간표가 확정된 뒤 데스크 또는 배가 업무가 별도로 배정됩니다.</li>
+          <li>근로 출퇴근 시 한국장학재단 출근부와 별도로 근태관리 프로그램을 반드시 작성해야 합니다.</li>
+          <li>근태관리 프로그램을 작성하지 않으면 장학재단 출근부에 입력했더라도 근로시간으로 인정되지 않을 수 있습니다.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="guide-example">
+      <strong>정규 수업 입력 예시</strong><br>
+      수업이 <b>15:00~16:15</b>라면 실제 16:00~17:00 근로가 불가능하므로
+      <b>15:00~16:00</b>과 <b>16:00~17:00</b> 두 칸 모두 ‘정규 수업’으로 선택합니다.
+    </div>
+  </div>
+</details>
+
+<section class="card use-guide">
+  <div class="use-guide-inner">
+    <div class="use-icon">✓</div>
+    <div>
+      <h3>시간표 입력 방법</h3>
+      <p>원하는 상태를 먼저 선택한 뒤 시간표 셀을 클릭하거나 드래그하세요. PC와 모바일 모두 여러 칸을 연속 선택할 수 있습니다. 변경 내용은 화면에 유지되며 <b>임시저장</b> 또는 <b>최종 제출</b>을 눌렀을 때 서버에 반영됩니다.</p>
+    </div>
+  </div>
+</section>
+
+<section class="editor-card">
+  <div class="toolbar" id="toolbar">
+    {% for key, meta in status_meta.items() if key != 'closed' %}
+    <button type="button" class="brush {% if key == 'first' %}active{% endif %}" data-status="{{ key }}" style="--brush-bg:{{ meta.color }};--brush-text:{{ meta.text }}">{{ meta.tool }}</button>
+    {% endfor %}
+  </div>
+  <p class="hint">상태를 선택한 뒤 클릭하거나 드래그하세요. 변경 내용은 화면에만 유지되며 저장 버튼을 누를 때 서버에 반영됩니다.</p>
+  <div class="schedule-scroll">
+    <table id="scheduleTable" class="schedule-table">
+      <thead><tr><th class="time-col">시간</th>{% for day in days %}<th data-day-index="{{ loop.index0 }}">{{ day }}요일</th>{% endfor %}</tr></thead>
+      <tbody>
+      {% for hour in hours %}
+        <tr><th class="time-col">{{ '%02d:00'|format(hour) }}~{{ '%02d:00'|format(hour+1) }}</th>
+        {% for day in days %}<td class="slot" data-day="{{ day }}" data-day-index="{{ loop.index0 }}" data-hour="{{ hour }}"></td>{% endfor %}</tr>
+      {% endfor %}
+      </tbody>
+      <tfoot>
+        <tr class="first-summary-row">
+          <th class="time-col first-summary-label">1순위 총 합계 시간</th>
+          {% for day in days %}
+          <td class="first-day-total" data-day-index="{{ loop.index0 }}">
+            <span>{{ day }}요일</span>
+            <strong id="firstTotal-{{ loop.index0 }}">0시간</strong>
+          </td>
+          {% endfor %}
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+</section>
+
+<section class="overall-first-total" aria-live="polite">
+  <span>전체 1순위 선택시간</span>
+  <strong id="overallFirstTotal">0시간</strong>
+</section>
+<div id="weeklyHoursNotice" class="weekly-hours-notice" aria-live="polite"></div>
+<label class="agreement"><input id="agreement" type="checkbox"> 위 작성 기준을 확인했으며, 미선택 시간은 해당 시간대 인원이 부족한 경우 임의 배정될 수 있음에 동의합니다.</label>
+<div class="action-bar">
+  <button id="resetButton" class="btn danger-outline" type="button">전체 초기화</button>
+  <span class="action-spacer"></span>
+  <button id="draftButton" class="btn secondary" type="button">임시저장</button>
+  <button id="submitButton" class="btn primary" type="button" disabled>최종 제출</button>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+window.SCHEDULE_CONFIG = {
+  days: {{ days | tojson }},
+  hours: {{ hours | tojson }},
+  statusMeta: {{ status_meta | tojson }},
+  maxConsecutive: {{ max_consecutive }},
+  studentNo: {{ student.student_no | tojson }},
+  workType: {{ student.work_type | tojson }},
+  workTypeLimits: {{ work_type_limits | tojson }}
+};
+</script>
+<script src="/static/schedule.js?v=46"></script>
+{% endblock %}

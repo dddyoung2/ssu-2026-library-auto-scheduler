@@ -1,0 +1,164 @@
+{% extends "base.html" %}
+{% block header_actions %}<form method="post" action="/logout"><button class="btn ghost small" type="submit">로그아웃</button></form>{% endblock %}
+{% block content %}
+<section class="student-head">
+  <div><p class="eyebrow">관리자 대시보드 · {{ admin_id }}</p><h1>근로학생 관리 및 시간표 배정</h1></div>
+</section>
+
+<nav class="admin-tabs" aria-label="관리자 탭">
+  <button class="admin-tab active" type="button" data-tab="students">학생 목록</button>
+  <button class="admin-tab" type="button" data-tab="schedules">전체·데스크 시간표</button>
+</nav>
+
+<section id="tab-students" class="admin-tab-panel active">
+  <div id="adminMetrics" class="metric-row"></div>
+  <div id="rosterReadiness"></div>
+
+  <section class="card roster-card">
+    <div class="result-title no-padding">
+      <div>
+        <p class="eyebrow">학생 명단 관리</p>
+        <h2>학생 1명 직접 추가</h2>
+        <p class="muted">최초 배포 시 학생은 0명입니다. 아래에서 직접 추가하거나 CSV 명단을 업로드한 학생만 로그인할 수 있습니다.</p>
+      </div>
+    </div>
+    <form id="addStudentForm" class="student-add-form">
+      <label>이름<input name="name" type="text" maxlength="80" placeholder="예: 김학생" required></label>
+      <label>학번<input name="student_no" type="text" maxlength="30" placeholder="예: 20260001" required></label>
+      <label>근로유형
+        <select name="work_type">
+          <option value="">미지정</option>
+          <option value="A">A형</option>
+          <option value="B">B형</option>
+        </select>
+      </label>
+      <button class="btn primary" type="submit">학생 추가</button>
+    </form>
+  </section>
+
+  <section class="card roster-card">
+    <div class="result-title no-padding">
+      <div>
+        <p class="eyebrow">일괄 등록</p>
+        <h2>학생 명단 CSV 업로드</h2>
+        <p class="muted"><code>name, student_no, work_type, active</code> 4개 열을 사용합니다. 기본은 기존 명단을 유지하면서 같은 학번은 수정하고 새 학번은 추가합니다.</p>
+      </div>
+      <a class="btn ghost small" href="/static/users_template_v46.csv" download>CSV 예시 다운로드</a>
+    </div>
+    <form id="importForm" class="roster-import-form">
+      <input type="file" name="file" accept=".csv" required>
+      <label>반영 방식
+        <select name="mode">
+          <option value="merge" selected>추가/수정 · 기존 학생 유지</option>
+          <option value="sync">전체 명단 동기화 · CSV에 없는 학생 비활성화</option>
+        </select>
+      </label>
+      <button class="btn secondary" type="submit">명단 반영</button>
+    </form>
+    <p class="muted roster-note">학생을 근로 대상에서 제외할 때는 삭제 대신 <strong>비활성</strong>으로 변경하세요. 기존 제출기록은 보존되고 로그인·자동배정에서만 제외됩니다.</p>
+  </section>
+
+  <details class="card demo-tools">
+    <summary>테스트용 도구 · 40명 더미데이터</summary>
+    <div class="demo-action-inner">
+      <div><p class="muted">실제 학생정보가 아닌 더미학생01~40 계정과 가상 제출시간표를 생성합니다. 실사용 명단 등록 전 기능 점검용으로만 사용하세요.</p></div>
+      <button id="generateDummyButton" class="btn ghost" type="button">40명 더미데이터 생성</button>
+    </div>
+  </details>
+
+  <section class="card table-card">
+    <div class="result-title">
+      <div><p class="eyebrow">등록 명단</p><h2>학생 정보 상시 수정</h2><p class="muted">이름·학번·유형·활성 상태를 수정한 뒤 해당 행의 저장 버튼을 누르세요.</p></div>
+    </div>
+    <div class="table-scroll">
+      <table class="admin-table student-manage-table">
+        <thead><tr><th>이름</th><th>학번</th><th>유형</th><th>계정상태</th><th>작성상태</th><th>마지막 저장</th><th>최종 제출</th><th>관리</th></tr></thead>
+        <tbody id="studentRows"></tbody>
+      </table>
+    </div>
+  </section>
+</section>
+
+<section id="tab-schedules" class="admin-tab-panel">
+  <section class="card admin-setting-card">
+    <div class="setting-heading">
+      <div><p class="eyebrow">STEP 1</p><h2>전체 근로시간표 설정</h2><p class="muted">모든 학생의 1순위 시간을 먼저 배정합니다. 특정 시간이 최소 인원보다 부족하면 2순위 → 3순위 순으로 학생을 이동 배정하되, 해당 학생의 다른 1순위 시간을 같은 시간만큼 빼서 주간 총 근로시간을 유지합니다.</p></div>
+      <div class="setting-fields compact-fields">
+        <label>1시간 최소 인원
+          <input id="fullMinStaff" type="number" min="1" max="20" value="5" inputmode="numeric">
+        </label>
+        <button id="generateFullButton" class="btn primary" type="button">전체 시간표 작성</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="card admin-setting-card">
+    <div class="setting-heading">
+      <div><p class="eyebrow">STEP 2</p><h2>데스크 배정 조건</h2><p class="muted">A/B형의 주간 데스크 상한과 하루 최대 데스크 시간을 직접 입력하세요. 기본적으로 한 학생은 하루 한 번의 2시간 블록을 우선 배정하고, 불가피한 경우 1시간 또는 추가 블록을 사용합니다.</p></div>
+      <div class="setting-fields desk-limit-fields">
+        <label>A형 주 최대 데스크
+          <input id="deskWeeklyMaxA" type="number" min="1" max="30" placeholder="예: 8" inputmode="numeric">
+        </label>
+        <label>B형 주 최대 데스크
+          <input id="deskWeeklyMaxB" type="number" min="1" max="30" placeholder="예: 4" inputmode="numeric">
+        </label>
+        <label>하루 최대 데스크
+          <input id="deskDailyMax" type="number" min="1" max="8" placeholder="예: 2" inputmode="numeric">
+        </label>
+      </div>
+    </div>
+
+    <div class="desk-two-person-block">
+      <div class="result-title no-padding">
+        <div><p class="eyebrow">데스크 2명 허용 시간</p><h3>2명으로 운영 가능한 칸을 선택하세요.</h3><p class="muted">선택하지 않은 시간은 기본 3명으로 배정합니다. 회색 칸은 운영하지 않는 시간입니다.</p></div>
+        <button id="clearTwoPersonSlots" class="btn ghost small" type="button">선택 초기화</button>
+      </div>
+      <div class="table-scroll">
+        <table id="deskTwoPersonGrid" class="desk-setting-grid">
+          <thead><tr><th>시간</th>{% for day in days %}<th>{{ day }}요일</th>{% endfor %}</tr></thead>
+          <tbody>
+          {% for hour in hours %}
+            <tr><th>{{ '%02d:00'|format(hour) }}~{{ '%02d:00'|format(hour+1) }}</th>
+            {% for day in days %}
+              <td>
+                <button type="button" class="desk-count-cell {% if day == '토' and hour >= 15 %}closed{% endif %}" data-day="{{ day }}" data-hour="{{ hour }}" {% if day == '토' and hour >= 15 %}disabled{% endif %}>{% if day == '토' and hour >= 15 %}운영 안 함{% else %}3명{% endif %}</button>
+              </td>
+            {% endfor %}
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="schedule-action-row">
+      <button id="generateDeskButton" class="btn primary" type="button">데스크 시간표 작성</button>
+      <a id="downloadScheduleButton" class="btn secondary disabled-link" href="/api/admin/demo/export.xlsx">전체·데스크 Excel 다운로드</a>
+    </div>
+  </section>
+
+  <div id="scheduleMetrics" class="metric-row"></div>
+  <div id="scheduleWarnings"></div>
+
+  <section class="card table-card schedule-result-card">
+    <div class="result-title"><div><p class="eyebrow">전체 근로시간표</p><h2>해당 시간에 근무하는 모든 학생</h2></div></div>
+    <div class="table-scroll"><table id="fullScheduleTable" class="admin-table schedule-result-table"></table></div>
+  </section>
+
+  <section class="card table-card schedule-result-card">
+    <div class="result-title"><div><p class="eyebrow">안내데스크 시간표</p><h2>시간별 데스크 담당 학생</h2></div></div>
+    <div class="table-scroll"><table id="deskScheduleTable" class="admin-table schedule-result-table"></table></div>
+  </section>
+
+  <section class="card table-card schedule-result-card">
+    <div class="result-title"><div><p class="eyebrow">학생별 요약</p><h2>1순위 목표시간·실제 배정시간·데스크시간</h2></div></div>
+    <div class="table-scroll"><table class="admin-table"><thead><tr><th>이름</th><th>학번</th><th>유형</th><th>1순위 목표</th><th>전체 배정</th><th>데스크</th></tr></thead><tbody id="studentAssignmentRows"></tbody></table></div>
+  </section>
+</section>
+{% endblock %}
+{% block scripts %}
+<script>
+window.ADMIN_SCHEDULE_CONFIG = {days: {{ days | tojson }}, hours: {{ hours | tojson }}};
+</script>
+<script src="/static/admin.js?v=46final"></script>
+{% endblock %}
