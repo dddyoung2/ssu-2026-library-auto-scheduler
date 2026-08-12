@@ -1,0 +1,16 @@
+[로컬 실행]
+프로젝트의 data/admins.csv 파일을 수정합니다.
+형식: user_id,password,active
+예: library_manager,원하는비밀번호,1
+
+[Render 실제 배포]
+실제 비밀번호가 든 data/admins.csv는 GitHub에 올리지 않습니다.
+Render Dashboard → 해당 서비스 → Environment → Secret Files에서 admins.csv를 생성/수정합니다.
+Render에서 admins.csv는 /etc/secrets/admins.csv에 제공되고, 앱은 이 파일을 우선 사용합니다.
+
+예시:
+user_id,password,active
+library_manager,비밀번호1,1
+scheduler_admin,비밀번호2,1
+
+active가 1이면 로그인 가능, 0이면 비활성입니다.

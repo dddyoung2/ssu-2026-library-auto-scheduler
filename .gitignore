@@ -9,9 +9,6 @@ scripts/
 .env.*
 !.env.example
 
-# Streamlit secret
-.streamlit/secrets.toml
-
 # Supabase CLI 로컬 임시 파일
 supabase/.branches
 supabase/.temp
@@ -20,10 +17,16 @@ supabase/.env
 # IDE
 .vscode/
 .idea/
+.claude/settings.local.json
 
 # local-data
-*.csv
-*.xlsx
-data/exports/*
 supabase/snippets/
-!data/exports/.gitkeep
+.pytest_cache/
+
+# data/ 는 기본적으로 전부 무시하고, 저장소에 커밋할 시드/템플릿 파일만 예외로 허용한다.
+# (SQLite DB·admins.csv·향후 엑셀 산출물 등 실행 중 생성되는 파일이 실수로 커밋되는 것을 방지)
+data/*
+!data/admins.example.csv
+!data/users.csv
+!data/users_template_40.csv
+!data/users_template_50.csv
