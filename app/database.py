@@ -5,6 +5,7 @@ import json
 import random
 from datetime import datetime, timezone
 from typing import Iterable
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import Boolean, DateTime, ForeignKey, String, Text, create_engine, delete, select
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship, sessionmaker
@@ -51,6 +52,25 @@ class ScheduleRevision(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
 
 
+class SystemSetting(Base):
+    __tablename__ = "system_settings"
+
+    key: Mapped[str] = mapped_column(String(80), primary_key=True)
+    value: Mapped[str] = mapped_column(Text, default="")
+
+
+class ScheduleAudit(Base):
+    __tablename__ = "schedule_audits"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    student_id: Mapped[int] = mapped_column(ForeignKey("students.id"), index=True)
+    actor_type: Mapped[str] = mapped_column(String(20), index=True)
+    actor_id: Mapped[str] = mapped_column(String(80), default="")
+    state: Mapped[str] = mapped_column(String(20), index=True)
+    schedule_json: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+
+
 class ScheduleRun(Base):
     __tablename__ = "schedule_runs"
 
@@ -72,6 +92,118 @@ SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False
 
 def utcnow() -> datetime:
     return datetime.now(timezone.utc)
+
+
+SEOUL_TZ = ZoneInfo("Asia/Seoul")
+ACCESS_START_KEY = "student_access_start_utc"
+ACCESS_END_KEY = "student_access_end_utc"
+ACCESS_MANUAL_LOCK_KEY = "student_access_manual_lock"
+
+
+def _setting_value(session, key: str) -> str:
+    row = session.get(SystemSetting, key)
+    return row.value if row else ""
+
+
+def _set_setting(session, key: str, value: str) -> None:
+    row = session.get(SystemSetting, key)
+    if row is None:
+        session.add(SystemSetting(key=key, value=value))
+    else:
+        row.value = value
+
+
+def _parse_local_datetime(value: str) -> datetime:
+    try:
+        parsed = datetime.fromisoformat(value.strip())
+    except (TypeError, ValueError) as exc:
+        raise ValueError("날짜와 시간을 올바르게 입력해 주세요.") from exc
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=SEOUL_TZ)
+    return parsed.astimezone(timezone.utc)
+
+
+def _local_input_value(value: str) -> str:
+    if not value:
+        return ""
+    try:
+        dt = datetime.fromisoformat(value)
+    except ValueError:
+        return ""
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(SEOUL_TZ).strftime("%Y-%m-%dT%H:%M")
+
+
+def student_access_status(now: datetime | None = None) -> dict:
+    now_utc = now or utcnow()
+    if now_utc.tzinfo is None:
+        now_utc = now_utc.replace(tzinfo=timezone.utc)
+    else:
+        now_utc = now_utc.astimezone(timezone.utc)
+    with SessionLocal() as session:
+        start_text = _setting_value(session, ACCESS_START_KEY)
+        end_text = _setting_value(session, ACCESS_END_KEY)
+        manual_lock = _setting_value(session, ACCESS_MANUAL_LOCK_KEY) == "1"
+
+    start = datetime.fromisoformat(start_text) if start_text else None
+    end = datetime.fromisoformat(end_text) if end_text else None
+    if start and start.tzinfo is None:
+        start = start.replace(tzinfo=timezone.utc)
+    if end and end.tzinfo is None:
+        end = end.replace(tzinfo=timezone.utc)
+
+    if manual_lock:
+        is_open, reason = False, "manual_lock"
+        message = "관리자가 학생 시간표 입력을 잠갔습니다. 수정이 필요한 경우 담당자에게 문의해 주세요."
+    elif start and end and now_utc < start:
+        is_open, reason = False, "not_started"
+        message = f"학생 시간표 입력은 {start.astimezone(SEOUL_TZ).strftime('%m월 %d일 %H:%M')}부터 가능합니다."
+    elif start and end and now_utc > end:
+        is_open, reason = False, "ended"
+        message = "학생 시간표 입력 기간이 종료되었습니다. 수정이 필요한 경우 담당자에게 문의해 주세요."
+    else:
+        is_open, reason = True, "within_window" if start and end else "not_configured"
+        message = "학생 시간표를 작성·수정할 수 있습니다."
+
+    return {
+        "is_open": is_open,
+        "reason": reason,
+        "message": message,
+        "start_at": _local_input_value(start_text),
+        "end_at": _local_input_value(end_text),
+        "manual_lock": manual_lock,
+        "configured": bool(start and end),
+    }
+
+
+def set_student_access_window(start_at: str, end_at: str) -> dict:
+    start = _parse_local_datetime(start_at)
+    end = _parse_local_datetime(end_at)
+    if end <= start:
+        raise ValueError("마감 시간은 시작 시간보다 뒤여야 합니다.")
+    with SessionLocal() as session:
+        _set_setting(session, ACCESS_START_KEY, start.isoformat())
+        _set_setting(session, ACCESS_END_KEY, end.isoformat())
+        _set_setting(session, ACCESS_MANUAL_LOCK_KEY, "0")
+        session.commit()
+    return student_access_status()
+
+
+def lock_student_access() -> dict:
+    with SessionLocal() as session:
+        _set_setting(session, ACCESS_MANUAL_LOCK_KEY, "1")
+        session.commit()
+    return student_access_status()
+
+
+def clear_student_access_window() -> dict:
+    with SessionLocal() as session:
+        _set_setting(session, ACCESS_START_KEY, "")
+        _set_setting(session, ACCESS_END_KEY, "")
+        _set_setting(session, ACCESS_MANUAL_LOCK_KEY, "0")
+        session.commit()
+    return student_access_status()
 
 
 def init_database() -> None:
@@ -158,7 +290,14 @@ def get_student_schedule(student_id: int) -> dict | None:
         }
 
 
-def save_student_schedule(student_id: int, schedule: dict, state: str) -> dict:
+def save_student_schedule(
+    student_id: int,
+    schedule: dict,
+    state: str,
+    *,
+    actor_type: str = "student",
+    actor_id: str = "",
+) -> dict:
     now = utcnow()
     with SessionLocal() as session:
         row = session.scalar(select(Schedule).where(Schedule.student_id == student_id))
@@ -177,15 +316,26 @@ def save_student_schedule(student_id: int, schedule: dict, state: str) -> dict:
             row.saved_at = now
             if state == "submitted":
                 row.submitted_at = now
+        serialized = json.dumps(schedule, ensure_ascii=False)
         session.add(
             ScheduleRevision(
                 student_id=student_id,
-                schedule_json=json.dumps(schedule, ensure_ascii=False),
+                schedule_json=serialized,
                 state=state,
                 created_at=now,
             )
         )
-        # 학생 제출내용이 바뀌면 이전 자동배정 결과는 무효화합니다.
+        session.add(
+            ScheduleAudit(
+                student_id=student_id,
+                actor_type=actor_type,
+                actor_id=actor_id,
+                state=state,
+                schedule_json=serialized,
+                created_at=now,
+            )
+        )
+        # 학생 또는 관리자가 제출내용을 바꾸면 이전 자동배정 결과는 무효화합니다.
         session.execute(delete(ScheduleRun))
         session.commit()
         return {

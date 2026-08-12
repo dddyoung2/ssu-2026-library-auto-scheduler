@@ -3,6 +3,13 @@
   const toast = document.getElementById("toast");
   const selectedTwoPersonSlots = new Set();
   let latestReadiness = null;
+  let latestStudentAccess = null;
+  let currentScheduleStudentId = null;
+  let currentScheduleRecord = null;
+  let currentAdminSchedule = null;
+  let currentAdminScheduleBackup = null;
+  let adminScheduleEditing = false;
+  let adminScheduleBrush = "first";
 
   const showToast = (message, error = false) => {
     toast.textContent = message;
@@ -13,6 +20,49 @@
   const escapeHtml = value => String(value ?? "").replace(/[&<>'"]/g, char => ({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;",'"':"&quot;"}[char]));
   const fmt = value => value ? new Date(value).toLocaleString("ko-KR") : "-";
   const stateLabel = {not_started:"미작성", draft:"임시저장", submitted:"최종 제출"};
+
+  const statusLabel = status => cfg.statusMeta?.[status]?.label || status;
+  const statusStyle = status => {
+    const item = cfg.statusMeta?.[status] || {};
+    return `background:${item.color || "#eef1f5"};color:${item.text || "#526174"}`;
+  };
+
+  function renderStudentAccess(access) {
+    latestStudentAccess = access;
+    const badge = document.getElementById("studentAccessBadge");
+    const desc = document.getElementById("studentAccessDescription");
+    const start = document.getElementById("studentAccessStart");
+    const end = document.getElementById("studentAccessEnd");
+    if (start && document.activeElement !== start) start.value = access.start_at || "";
+    if (end && document.activeElement !== end) end.value = access.end_at || "";
+    if (badge) {
+      badge.className = `access-status-badge ${access.is_open ? "open" : "locked"}`;
+      badge.textContent = access.is_open ? "학생 로그인 가능" : "학생 로그인 잠금";
+    }
+    if (desc) {
+      const range = access.configured && access.start_at && access.end_at
+        ? ` · ${access.start_at.replace("T", " ")} ~ ${access.end_at.replace("T", " ")}`
+        : " · 입력기간 미설정(상시 허용)";
+      desc.textContent = `${access.message}${range}`;
+    }
+    const popupBadge = document.getElementById("studentScheduleAccessBadge");
+    const editButton = document.getElementById("adminEditScheduleButton");
+    const editNotice = document.getElementById("adminScheduleEditNotice");
+    if (popupBadge) {
+      popupBadge.className = `access-status-badge small ${access.is_open ? "open" : "locked"}`;
+      popupBadge.textContent = access.is_open ? "학생 입력 중" : "학생 입력 잠금";
+    }
+    if (editButton) editButton.disabled = access.is_open;
+    if (editNotice) editNotice.textContent = access.is_open
+      ? "학생 입력기간 중에는 충돌 방지를 위해 관리자 수정이 잠겨 있습니다."
+      : "학생 입력이 잠긴 상태입니다. 관리자만 이 시간표를 수정할 수 있습니다.";
+  }
+
+  async function loadStudentAccess() {
+    const response = await fetch("/api/admin/student-access");
+    if (!response.ok) return;
+    renderStudentAccess(await response.json());
+  }
 
   function renderReadiness(readiness) {
     latestReadiness = readiness;
@@ -50,7 +100,7 @@
 
     const tbody = document.getElementById("studentRows");
     if (!students.length) {
-      tbody.innerHTML = '<tr><td colspan="8" class="empty-result">등록된 학생이 없습니다. 위에서 학생을 추가하거나 CSV를 업로드해 주세요.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="9" class="empty-result">등록된 학생이 없습니다. 위에서 학생을 추가하거나 CSV를 업로드해 주세요.</td></tr>';
       return;
     }
     tbody.innerHTML = students.map(student => `
@@ -69,8 +119,14 @@
         <td><span class="status-pill ${student.state}">${stateLabel[student.state] || student.state}</span></td>
         <td>${fmt(student.saved_at)}</td>
         <td>${fmt(student.submitted_at)}</td>
+        <td><button class="btn primary small view-student-schedule" type="button">${student.state === "not_started" ? "시간표 작성" : "시간표 보기"}</button></td>
         <td><button class="btn secondary small save-student" type="button">수정 저장</button></td>
       </tr>`).join("");
+
+    document.querySelectorAll(".view-student-schedule").forEach(button => button.addEventListener("click", () => {
+      const row = button.closest("tr");
+      openStudentSchedule(row.dataset.studentId).catch(error => showToast(error.message || "시간표를 불러오지 못했습니다.", true));
+    }));
 
     document.querySelectorAll(".save-student").forEach(button => button.addEventListener("click", async () => {
       const row = button.closest("tr");
@@ -99,6 +155,142 @@
         button.disabled = false;
       }
     }));
+  }
+
+  const cloneSchedule = schedule => JSON.parse(JSON.stringify(schedule || {}));
+
+  function renderStudentSchedulePopupTable() {
+    const table = document.getElementById("studentSchedulePopupTable");
+    if (!table || !currentAdminSchedule) return;
+    table.classList.toggle("editing", adminScheduleEditing);
+    table.innerHTML = `
+      <thead><tr><th>시간</th>${cfg.days.map(day => `<th>${day}요일</th>`).join("")}</tr></thead>
+      <tbody>${cfg.hours.map(hour => `
+        <tr>
+          <th>${String(hour).padStart(2,"0")}:00~${String(hour + 1).padStart(2,"0")}:00</th>
+          ${cfg.days.map(day => {
+            const value = currentAdminSchedule?.[day]?.[String(hour)] || "unselected";
+            return `<td><div class="admin-student-schedule-cell ${escapeHtml(value)}" data-day="${escapeHtml(day)}" data-hour="${hour}" data-status="${escapeHtml(value)}" style="${statusStyle(value)}">${escapeHtml(statusLabel(value))}</div></td>`;
+          }).join("")}
+        </tr>`).join("")}
+      </tbody>`;
+  }
+
+  function setAdminScheduleEditing(enabled) {
+    adminScheduleEditing = enabled;
+    const editor = document.getElementById("adminScheduleEditor");
+    const saveActions = document.getElementById("adminScheduleSaveActions");
+    const editButton = document.getElementById("adminEditScheduleButton");
+    editor.hidden = !enabled;
+    saveActions.hidden = !enabled;
+    editButton.textContent = enabled ? "수정 중" : "관리자 수정";
+    editButton.disabled = enabled || Boolean(latestStudentAccess?.is_open);
+    renderStudentSchedulePopupTable();
+  }
+
+  async function openStudentSchedule(studentId) {
+    const response = await fetch(`/api/admin/students/${studentId}/schedule`);
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.detail || "시간표를 불러오지 못했습니다.");
+    currentScheduleStudentId = String(studentId);
+    currentScheduleRecord = data;
+    currentAdminSchedule = cloneSchedule(data.schedule);
+    currentAdminScheduleBackup = null;
+    adminScheduleEditing = false;
+    renderStudentAccess(data.student_access || latestStudentAccess || {is_open:true, message:""});
+    const state = data.state || "not_started";
+    document.getElementById("studentScheduleModalTitle").textContent = `${data.student.name} 시간표`;
+    const stateChip = document.getElementById("studentScheduleState");
+    stateChip.className = `status-pill ${state}`;
+    stateChip.textContent = stateLabel[state] || state;
+    document.getElementById("studentScheduleMeta").innerHTML = `
+      <span class="meta-chip">학번 ${escapeHtml(data.student.student_no)}</span>
+      <span class="meta-chip">${escapeHtml(data.student.work_type || "유형 미지정")}${data.student.work_type ? "형" : ""}</span>
+      <span class="meta-chip">${data.student.active ? "활성" : "비활성"}</span>
+      <span class="meta-chip">마지막 저장 ${escapeHtml(fmt(data.saved_at))}</span>`;
+    setAdminScheduleEditing(false);
+    document.getElementById("studentScheduleModal").classList.add("open");
+    document.getElementById("studentScheduleModal").setAttribute("aria-hidden", "false");
+    document.body.style.overflow = "hidden";
+  }
+
+  function closeStudentSchedule() {
+    if (adminScheduleEditing && currentAdminScheduleBackup) currentAdminSchedule = cloneSchedule(currentAdminScheduleBackup);
+    setAdminScheduleEditing(false);
+    document.getElementById("studentScheduleModal").classList.remove("open");
+    document.getElementById("studentScheduleModal").setAttribute("aria-hidden", "true");
+    document.body.style.overflow = "";
+    currentScheduleStudentId = null;
+    currentScheduleRecord = null;
+    currentAdminSchedule = null;
+    currentAdminScheduleBackup = null;
+  }
+
+  function startAdminScheduleEdit() {
+    if (latestStudentAccess?.is_open) {
+      showToast("학생 입력기간 중에는 관리자 수정이 잠겨 있습니다.", true);
+      return;
+    }
+    currentAdminScheduleBackup = cloneSchedule(currentAdminSchedule);
+    setAdminScheduleEditing(true);
+  }
+
+  function cancelAdminScheduleEdit() {
+    if (currentAdminScheduleBackup) currentAdminSchedule = cloneSchedule(currentAdminScheduleBackup);
+    currentAdminScheduleBackup = null;
+    setAdminScheduleEditing(false);
+    showToast("관리자 수정 내용을 취소했습니다.");
+  }
+
+  function maxConsecutiveAvailable(day, hour, status) {
+    let current = 0, maximum = 0;
+    cfg.hours.forEach(h => {
+      const value = h === hour ? status : currentAdminSchedule?.[day]?.[String(h)];
+      if (["first", "second", "third"].includes(value)) {
+        current += 1;
+        maximum = Math.max(maximum, current);
+      } else current = 0;
+    });
+    return maximum;
+  }
+
+  function editAdminScheduleCell(cell) {
+    if (!adminScheduleEditing || !cell || cell.dataset.status === "closed") return;
+    const day = cell.dataset.day;
+    const hour = Number(cell.dataset.hour);
+    if (["first", "second", "third"].includes(adminScheduleBrush) && maxConsecutiveAvailable(day, hour, adminScheduleBrush) > 4) {
+      showToast("최대 연속 근로는 4시간까지 가능합니다.", true);
+      return;
+    }
+    currentAdminSchedule[day][String(hour)] = adminScheduleBrush;
+    cell.dataset.status = adminScheduleBrush;
+    cell.className = `admin-student-schedule-cell ${adminScheduleBrush}`;
+    cell.setAttribute("style", statusStyle(adminScheduleBrush));
+    cell.textContent = statusLabel(adminScheduleBrush);
+  }
+
+  async function saveAdminScheduleEdit() {
+    if (!currentScheduleStudentId || !currentScheduleRecord) return;
+    const state = currentScheduleRecord.state === "submitted" ? "submitted" : "draft";
+    const response = await fetch(`/api/admin/students/${currentScheduleStudentId}/schedule`, {
+      method: "PUT",
+      headers: {"Content-Type":"application/json"},
+      body: JSON.stringify({schedule: currentAdminSchedule, state}),
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.detail || "관리자 수정사항을 저장하지 못했습니다.");
+    currentScheduleRecord = {...currentScheduleRecord, ...data, state};
+    currentAdminScheduleBackup = null;
+    setAdminScheduleEditing(false);
+    document.getElementById("studentScheduleMeta").innerHTML = `
+      <span class="meta-chip">학번 ${escapeHtml(currentScheduleRecord.student.student_no)}</span>
+      <span class="meta-chip">${escapeHtml(currentScheduleRecord.student.work_type || "유형 미지정")}${currentScheduleRecord.student.work_type ? "형" : ""}</span>
+      <span class="meta-chip">${currentScheduleRecord.student.active ? "활성" : "비활성"}</span>
+      <span class="meta-chip">마지막 저장 ${escapeHtml(fmt(data.saved_at))}</span>
+      <span class="meta-chip">수정자 ${escapeHtml(data.edited_by || "관리자")}</span>`;
+    showToast("관리자 수정사항을 저장했습니다. 기존 자동배정 결과는 초기화되었습니다.");
+    await loadStudents();
+    await loadRun();
   }
 
   const scheduleCell = people => {
@@ -192,6 +384,52 @@
     selectedTwoPersonSlots.clear();
     renderTwoPersonGrid();
   });
+
+  document.getElementById("saveAccessWindowButton").addEventListener("click", async event => {
+    const startAt = document.getElementById("studentAccessStart").value;
+    const endAt = document.getElementById("studentAccessEnd").value;
+    if (!startAt || !endAt) { showToast("입력 시작과 마감 시간을 모두 선택해 주세요.", true); return; }
+    const button = event.currentTarget;
+    button.disabled = true;
+    try {
+      const response = await fetch("/api/admin/student-access", {
+        method:"PUT", headers:{"Content-Type":"application/json"}, body:JSON.stringify({start_at:startAt,end_at:endAt})
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.detail);
+      renderStudentAccess(data);
+      showToast("학생 입력기간을 저장했습니다. 시작 전·마감 후에는 학생 로그인이 자동 잠금됩니다.");
+    } catch (error) { showToast(error.message || "입력기간 저장에 실패했습니다.", true); }
+    finally { button.disabled = false; }
+  });
+
+  document.getElementById("lockStudentAccessButton").addEventListener("click", async () => {
+    if (!confirm("지금 학생 로그인을 잠글까요? 이미 로그인한 학생도 다음 요청부터 더 이상 수정할 수 없습니다.")) return;
+    const response = await fetch("/api/admin/student-access/lock", {method:"POST"});
+    const data = await response.json();
+    if (!response.ok) { showToast(data.detail || "잠금에 실패했습니다.", true); return; }
+    renderStudentAccess(data); showToast("학생 로그인을 잠갔습니다.");
+  });
+
+  document.getElementById("clearAccessWindowButton").addEventListener("click", async () => {
+    if (!confirm("입력기간 설정을 해제하면 학생 로그인이 상시 허용됩니다. 계속할까요?")) return;
+    const response = await fetch("/api/admin/student-access", {method:"DELETE"});
+    const data = await response.json();
+    if (!response.ok) { showToast(data.detail || "기간 설정 해제에 실패했습니다.", true); return; }
+    renderStudentAccess(data); showToast("입력기간 설정을 해제했습니다. 학생 로그인이 다시 허용됩니다.");
+  });
+
+  document.getElementById("adminEditScheduleButton").addEventListener("click", startAdminScheduleEdit);
+  document.getElementById("cancelAdminScheduleEdit").addEventListener("click", cancelAdminScheduleEdit);
+  document.getElementById("saveAdminScheduleEdit").addEventListener("click", () => saveAdminScheduleEdit().catch(error => showToast(error.message, true)));
+  document.getElementById("closeStudentScheduleModal").addEventListener("click", closeStudentSchedule);
+  document.getElementById("studentScheduleModal").addEventListener("click", event => { if (event.target.id === "studentScheduleModal") closeStudentSchedule(); });
+  document.getElementById("studentSchedulePopupTable").addEventListener("click", event => editAdminScheduleCell(event.target.closest(".admin-student-schedule-cell")));
+  document.querySelectorAll(".admin-schedule-brush").forEach(button => button.addEventListener("click", () => {
+    adminScheduleBrush = button.dataset.status;
+    document.querySelectorAll(".admin-schedule-brush").forEach(item => item.classList.toggle("active", item === button));
+  }));
+  document.addEventListener("keydown", event => { if (event.key === "Escape" && document.getElementById("studentScheduleModal").classList.contains("open")) closeStudentSchedule(); });
 
   document.querySelectorAll(".admin-tab").forEach(button => button.addEventListener("click", () => {
     document.querySelectorAll(".admin-tab").forEach(item => item.classList.toggle("active", item === button));
@@ -319,6 +557,7 @@
   });
 
   renderTwoPersonGrid();
+  loadStudentAccess();
   loadStudents();
   loadRun();
 })();

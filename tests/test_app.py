@@ -194,3 +194,81 @@ def test_admin_credentials_csv_has_two_default_accounts():
     credentials = dict(load_admin_credentials())
     assert credentials.get('admin01') == 'Admin1234!'
     assert credentials.get('admin02') == 'Admin2345!'
+
+
+def test_student_access_window_locks_login_outside_period_and_allows_inside_period():
+    reset_db()
+    with TestClient(app) as client:
+        seed_student("기간학생", "20260111", "A")
+        login_admin(client)
+        future = client.put(
+            "/api/admin/student-access",
+            json={"start_at": "2099-01-01T09:00", "end_at": "2099-01-02T23:59"},
+        )
+        assert future.status_code == 200
+        assert future.json()["is_open"] is False
+        client.post("/logout")
+        blocked = client.post("/login/student", data={"name": "기간학생", "student_no": "20260111"}, follow_redirects=False)
+        assert blocked.status_code == 423
+        assert "입력은" in blocked.text
+
+        login_admin(client)
+        cleared = client.delete("/api/admin/student-access")
+        assert cleared.status_code == 200
+        assert cleared.json()["is_open"] is True
+        client.post("/logout")
+        allowed = client.post("/login/student", data={"name": "기간학생", "student_no": "20260111"}, follow_redirects=False)
+        assert allowed.status_code == 303
+
+
+def test_admin_can_view_schedule_anytime_but_edit_only_when_student_access_locked():
+    reset_db()
+    with TestClient(app) as client:
+        seed_student("수정학생", "20260222", "A")
+        client.post("/login/student", data={"name": "수정학생", "student_no": "20260222"})
+        schedule = build_schedule()
+        schedule["월"]["9"] = "first"
+        saved = client.put("/api/me/schedule", json={"schedule": schedule, "state": "submitted"})
+        assert saved.status_code == 200
+        client.post("/logout")
+
+        login_admin(client)
+        students = client.get("/api/admin/students").json()["students"]
+        student_id = next(item["id"] for item in students if item["student_no"] == "20260222")
+        viewed = client.get(f"/api/admin/students/{student_id}/schedule")
+        assert viewed.status_code == 200
+        assert viewed.json()["schedule"]["월"]["9"] == "first"
+
+        edited_schedule = viewed.json()["schedule"]
+        edited_schedule["월"]["9"] = "second"
+        blocked = client.put(
+            f"/api/admin/students/{student_id}/schedule",
+            json={"schedule": edited_schedule, "state": "submitted"},
+        )
+        assert blocked.status_code == 409
+
+        locked = client.post("/api/admin/student-access/lock")
+        assert locked.status_code == 200
+        assert locked.json()["is_open"] is False
+        edited = client.put(
+            f"/api/admin/students/{student_id}/schedule",
+            json={"schedule": edited_schedule, "state": "submitted"},
+        )
+        assert edited.status_code == 200
+        assert edited.json()["schedule"]["월"]["9"] == "second"
+        assert edited.json()["edited_by"] == "admin01"
+
+        reread = client.get(f"/api/admin/students/{student_id}/schedule")
+        assert reread.json()["schedule"]["월"]["9"] == "second"
+
+
+def test_admin_schedule_popup_and_access_controls_exist_in_admin_page():
+    reset_db()
+    with TestClient(app) as client:
+        login_admin(client)
+        page = client.get("/admin")
+        assert page.status_code == 200
+        assert "학생 시간표 작성 가능 기간" in page.text
+        assert "studentScheduleModal" in page.text
+        assert "관리자 수정 저장" in page.text
+        assert "시간표</th>" in page.text

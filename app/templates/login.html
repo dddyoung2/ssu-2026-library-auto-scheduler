@@ -9,11 +9,12 @@
   <section class="card">
     <h2>학생 로그인</h2>
     <p class="muted">등록된 이름과 학번을 정확히 입력해 주세요.</p>
+    {% if student_access and not student_access.is_open %}<div class="alert warning"><strong>학생 입력 잠금</strong><br>{{ student_access.message }}</div>{% endif %}
     {% if student_error %}<div class="alert error">{{ student_error }}</div>{% endif %}
     <form method="post" action="/login/student" class="form-stack">
-      <label>이름<input name="name" autocomplete="name" required></label>
-      <label>학번<input name="student_no" inputmode="numeric" autocomplete="username" required></label>
-      <button class="btn primary" type="submit">학생 로그인</button>
+      <label>이름<input name="name" autocomplete="name" required {% if student_access and not student_access.is_open %}disabled{% endif %}></label>
+      <label>학번<input name="student_no" inputmode="numeric" autocomplete="username" required {% if student_access and not student_access.is_open %}disabled{% endif %}></label>
+      <button class="btn primary" type="submit" {% if student_access and not student_access.is_open %}disabled{% endif %}>학생 로그인</button>
     </form>
   </section>
   <section class="card subtle">
