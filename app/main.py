@@ -39,6 +39,10 @@ from app.database import (
     save_schedule_run,
     save_student_schedule,
     schedule_generation_readiness,
+    student_access_status,
+    set_student_access_window,
+    lock_student_access,
+    clear_student_access_window,
     scheduler_students,
     sync_students,
     update_student,
@@ -101,10 +105,23 @@ class DeskScheduleSettings(BaseModel):
     two_person_slots: list[str] = []
 
 
+class StudentAccessWindowPayload(BaseModel):
+    start_at: str
+    end_at: str
+
+
+class AdminSchedulePayload(BaseModel):
+    schedule: dict
+    state: Literal["draft", "submitted"]
+
+
 def current_student_id(request: Request) -> int:
     student_id = request.session.get("student_id")
     if not isinstance(student_id, int):
         raise HTTPException(status_code=401, detail="학생 로그인이 필요합니다.")
+    if not student_access_status()["is_open"]:
+        request.session.clear()
+        raise HTTPException(status_code=423, detail="학생 시간표 입력 기간이 종료되어 현재 수정할 수 없습니다.")
     return student_id
 
 
@@ -134,11 +151,19 @@ def landing(request: Request):
         return RedirectResponse("/student", status_code=303)
     if request.session.get("admin"):
         return RedirectResponse("/admin", status_code=303)
-    return templates.TemplateResponse(request, "login.html", {"title": APP_TITLE})
+    return templates.TemplateResponse(request, "login.html", {"title": APP_TITLE, "student_access": student_access_status()})
 
 
 @app.post("/login/student")
 def student_login(request: Request, name: str = Form(...), student_no: str = Form(...)):
+    access = student_access_status()
+    if not access["is_open"]:
+        return templates.TemplateResponse(
+            request,
+            "login.html",
+            {"title": APP_TITLE, "student_error": access["message"], "student_access": access},
+            status_code=423,
+        )
     student = authenticate_student(name, student_no)
     if student is None:
         if active_student_count() == 0:
@@ -148,7 +173,7 @@ def student_login(request: Request, name: str = Form(...), student_no: str = For
         return templates.TemplateResponse(
             request,
             "login.html",
-            {"title": APP_TITLE, "student_error": message},
+            {"title": APP_TITLE, "student_error": message, "student_access": access},
             status_code=401,
         )
     request.session.clear()
@@ -180,6 +205,9 @@ def logout(request: Request):
 
 @app.get("/student", response_class=HTMLResponse)
 def student_page(request: Request):
+    if not student_access_status()["is_open"]:
+        request.session.clear()
+        return RedirectResponse("/", status_code=303)
     student_id = current_student_id(request)
     student = get_student(student_id)
     if student is None or not student.active:
@@ -251,7 +279,13 @@ def admin_page(request: Request):
     return templates.TemplateResponse(
         request,
         "admin.html",
-        {"title": APP_TITLE, "days": DAYS, "hours": HOURS, "admin_id": request.session.get("admin_id", "관리자")},
+        {
+            "title": APP_TITLE,
+            "days": DAYS,
+            "hours": HOURS,
+            "admin_id": request.session.get("admin_id", "관리자"),
+            "status_meta": STATUS_META,
+        },
     )
 
 
@@ -259,6 +293,82 @@ def admin_page(request: Request):
 def api_admin_students(request: Request):
     require_admin(request)
     return {"students": admin_students(), "readiness": schedule_generation_readiness()}
+
+
+
+
+@app.get("/api/admin/student-access")
+def api_admin_student_access(request: Request):
+    require_admin(request)
+    return student_access_status()
+
+
+@app.put("/api/admin/student-access")
+def api_admin_set_student_access(request: Request, payload: StudentAccessWindowPayload):
+    require_admin(request)
+    try:
+        return set_student_access_window(payload.start_at, payload.end_at)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@app.post("/api/admin/student-access/lock")
+def api_admin_lock_student_access(request: Request):
+    require_admin(request)
+    return lock_student_access()
+
+
+@app.delete("/api/admin/student-access")
+def api_admin_clear_student_access(request: Request):
+    require_admin(request)
+    return clear_student_access_window()
+
+
+@app.get("/api/admin/students/{student_id}/schedule")
+def api_admin_get_student_schedule(request: Request, student_id: int):
+    require_admin(request)
+    student = get_student(student_id)
+    if student is None:
+        raise HTTPException(status_code=404, detail="학생을 찾을 수 없습니다.")
+    record = get_student_schedule(student_id)
+    if record is None:
+        record = {"schedule": default_schedule(), "state": "not_started", "saved_at": None, "submitted_at": None}
+    return {
+        **record,
+        "student": {
+            "id": student.id,
+            "name": student.name,
+            "student_no": student.student_no,
+            "work_type": student.work_type,
+            "active": student.active,
+        },
+        "student_access": student_access_status(),
+    }
+
+
+@app.put("/api/admin/students/{student_id}/schedule")
+def api_admin_update_student_schedule(request: Request, student_id: int, payload: AdminSchedulePayload):
+    require_admin(request)
+    access = student_access_status()
+    if access["is_open"]:
+        raise HTTPException(status_code=409, detail="학생 입력기간 중에는 관리자 수정이 잠겨 있습니다. 입력기간 종료 후 수정해 주세요.")
+    student = get_student(student_id)
+    if student is None:
+        raise HTTPException(status_code=404, detail="학생을 찾을 수 없습니다.")
+    try:
+        schedule = validate_schedule(payload.schedule)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    state = payload.state if payload.state in {"draft", "submitted"} else "draft"
+    admin_id = str(request.session.get("admin_id", "관리자"))
+    meta = save_student_schedule(
+        student_id,
+        schedule,
+        state,
+        actor_type="admin",
+        actor_id=admin_id,
+    )
+    return {"ok": True, **meta, "schedule": schedule, "edited_by": admin_id}
 
 
 @app.post("/api/admin/students")

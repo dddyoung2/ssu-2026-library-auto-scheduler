@@ -166,7 +166,10 @@
     }
     const response = await fetch("/api/me/schedule", {method:"PUT", headers:{"Content-Type":"application/json"}, body:JSON.stringify({schedule, state})});
     const data = await response.json();
-    if (!response.ok) throw new Error(data.detail || "저장하지 못했습니다.");
+    if (!response.ok) {
+      if ([401, 423].includes(response.status)) setTimeout(() => { location.href = "/"; }, 900);
+      throw new Error(data.detail || "저장하지 못했습니다.");
+    }
     schedule = normalize(data.schedule);
     localStorage.removeItem(storageKey);
     dirty = false;
@@ -184,7 +187,10 @@
     if (!["A", "B"].includes(value)) throw new Error("A형 또는 B형을 선택해 주세요.");
     const response = await fetch("/api/me/work-type", {method:"PUT", headers:{"Content-Type":"application/json"}, body:JSON.stringify({work_type:value})});
     const data = await response.json();
-    if (!response.ok) throw new Error(data.detail || "근로유형을 저장하지 못했습니다.");
+    if (!response.ok) {
+      if ([401, 423].includes(response.status)) setTimeout(() => { location.href = "/"; }, 900);
+      throw new Error(data.detail || "근로유형을 저장하지 못했습니다.");
+    }
     currentWorkType = data.work_type;
     updateSubmitState();
     renderWeeklyNotice();

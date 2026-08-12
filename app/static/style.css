@@ -215,3 +215,65 @@
   .student-add-form{grid-template-columns:1fr}
   .demo-action-inner{align-items:stretch;flex-direction:column}
 }
+
+/* v4.7: student access window + admin student-schedule popup/editor */
+.access-window-card{margin-bottom:18px}
+.access-window-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;margin-bottom:16px}
+.access-window-heading h2{margin:5px 0 7px}
+.access-window-controls{display:grid;grid-template-columns:minmax(210px,1fr) minmax(210px,1fr) auto auto auto;gap:10px;align-items:end}
+.access-window-controls label{min-width:0;color:#40506a}
+.access-window-description{margin:12px 0 0;line-height:1.55}
+.access-status-badge{display:inline-flex;align-items:center;justify-content:center;min-width:88px;padding:7px 11px;border-radius:999px;background:#eef1f5;color:#667085;font-size:12px;font-weight:850;white-space:nowrap}
+.access-status-badge.open{background:#dcf6e7;color:#146b3a}
+.access-status-badge.locked{background:#fff0ef;color:#9b241a}
+.access-status-badge.small{min-width:0;padding:6px 9px}
+
+.schedule-modal-backdrop{position:fixed;inset:0;z-index:120;display:none;align-items:center;justify-content:center;padding:18px;background:rgba(15,23,42,.5)}
+.schedule-modal-backdrop.open{display:flex}
+.student-schedule-modal{width:min(1240px,100%);max-height:95vh;display:flex;flex-direction:column;overflow:hidden;background:#fff;border:1px solid var(--line);border-radius:18px;box-shadow:0 32px 90px rgba(15,23,42,.28)}
+.student-schedule-modal-head{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;padding:18px 20px;border-bottom:1px solid var(--line)}
+.student-schedule-title-row{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+.student-schedule-title-row h2{margin:0;font-size:24px;letter-spacing:-.025em}
+.student-schedule-meta{display:flex;gap:7px;flex-wrap:wrap;margin-top:8px}
+.student-schedule-meta .meta-chip{display:inline-flex;padding:5px 8px;border:1px solid var(--line);border-radius:999px;background:#f7f9fc;color:#586579;font-size:12px}
+.modal-close-button{width:38px;height:38px;border:0;border-radius:10px;background:#f2f4f7;color:#344054;font-size:24px;line-height:1;cursor:pointer}
+.student-schedule-modal-body{padding:16px 20px 20px;overflow:auto}
+.student-schedule-toolbar-row{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin-bottom:12px}
+.student-schedule-toolbar-row strong{font-size:16px}
+.modal-helper{margin:4px 0 0;font-size:13px}
+.student-schedule-mode-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.admin-schedule-editor{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin:0 0 12px;padding:10px;border:1px solid var(--line);border-radius:12px;background:#f8fafc}
+.admin-schedule-editor[hidden]{display:none}
+.admin-schedule-editor>strong{margin-right:2px;font-size:13px}
+.admin-schedule-editor>span{margin-left:auto;color:var(--muted);font-size:12px}
+.admin-schedule-brush{border:2px solid transparent;border-radius:9px;padding:8px 11px;background:var(--brush-bg);color:var(--brush-text);font:inherit;font-size:13px;font-weight:850;cursor:pointer}
+.admin-schedule-brush.active{border-color:#172033;box-shadow:0 0 0 2px #fff inset}
+.student-schedule-table-scroll{overflow:auto;border:1px solid #d8e0ea;border-radius:10px}
+.student-schedule-popup-table{width:100%;min-width:900px;table-layout:fixed;border-collapse:collapse;border-spacing:0}
+.student-schedule-popup-table th,.student-schedule-popup-table td{padding:0;border:1px solid #dce3ec;text-align:center}
+.student-schedule-popup-table thead th{height:44px;background:#f7f9fc;color:#435168;font-size:13px;font-weight:850}
+.student-schedule-popup-table thead th:first-child{width:150px}
+.student-schedule-popup-table tbody th{height:48px;background:#fbfcfe;color:#4c5a70;font-size:12px;font-weight:850}
+.admin-student-schedule-cell{width:100%;height:48px;display:flex;align-items:center;justify-content:center;padding:0;margin:0;border:0;border-radius:0;font-size:13px;font-weight:850;user-select:none;-webkit-user-select:none}
+.student-schedule-popup-table.editing .admin-student-schedule-cell:not(.closed){cursor:pointer}
+.student-schedule-popup-table.editing .admin-student-schedule-cell:not(.closed):hover{filter:brightness(.965);outline:2px solid rgba(35,90,166,.25);outline-offset:-2px}
+.admin-student-schedule-cell.closed{cursor:not-allowed;background-image:repeating-linear-gradient(135deg,rgba(255,255,255,.08) 0 6px,transparent 6px 12px)}
+.student-schedule-modal-foot{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:13px 20px;border-top:1px solid var(--line);background:#fbfcfe}
+.admin-schedule-save-actions{display:flex;gap:8px}
+.admin-schedule-save-actions[hidden]{display:none}
+
+@media(max-width:1100px){
+  .access-window-controls{grid-template-columns:1fr 1fr}
+  .access-window-controls .btn{width:100%}
+}
+@media(max-width:820px){
+  .access-window-heading,.student-schedule-toolbar-row,.student-schedule-modal-foot{align-items:stretch;flex-direction:column}
+  .access-window-controls{grid-template-columns:1fr}
+  .schedule-modal-backdrop{padding:6px}
+  .student-schedule-modal{max-height:98vh;border-radius:12px}
+  .student-schedule-modal-head,.student-schedule-modal-body,.student-schedule-modal-foot{padding-left:12px;padding-right:12px}
+  .student-schedule-popup-table{min-width:760px}
+  .admin-schedule-editor>span{width:100%;margin-left:0}
+  .admin-schedule-save-actions{width:100%}
+  .admin-schedule-save-actions .btn{flex:1}
+}

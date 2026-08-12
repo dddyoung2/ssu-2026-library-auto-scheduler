@@ -11,6 +11,25 @@
 </nav>
 
 <section id="tab-students" class="admin-tab-panel active">
+  <section class="card access-window-card">
+    <div class="access-window-heading">
+      <div>
+        <p class="eyebrow">학생 입력기간 관리</p>
+        <h2>학생 시간표 작성 가능 기간</h2>
+        <p class="muted">시작·마감 시간을 저장하면 해당 기간에만 학생 로그인이 가능합니다. 기간이 끝난 뒤에는 관리자만 학생별 시간표를 수정할 수 있습니다.</p>
+      </div>
+      <div id="studentAccessBadge" class="access-status-badge">확인 중</div>
+    </div>
+    <div class="access-window-controls">
+      <label>입력 시작<input id="studentAccessStart" type="datetime-local"></label>
+      <label>입력 마감<input id="studentAccessEnd" type="datetime-local"></label>
+      <button id="saveAccessWindowButton" class="btn primary" type="button">입력기간 저장</button>
+      <button id="lockStudentAccessButton" class="btn danger-outline" type="button">지금 학생 로그인 잠금</button>
+      <button id="clearAccessWindowButton" class="btn ghost" type="button">기간 설정 해제</button>
+    </div>
+    <p id="studentAccessDescription" class="muted access-window-description">학생 접근 상태를 불러오는 중입니다.</p>
+  </section>
+
   <div id="adminMetrics" class="metric-row"></div>
   <div id="rosterReadiness"></div>
 
@@ -72,7 +91,7 @@
     </div>
     <div class="table-scroll">
       <table class="admin-table student-manage-table">
-        <thead><tr><th>이름</th><th>학번</th><th>유형</th><th>계정상태</th><th>작성상태</th><th>마지막 저장</th><th>최종 제출</th><th>관리</th></tr></thead>
+        <thead><tr><th>이름</th><th>학번</th><th>유형</th><th>계정상태</th><th>작성상태</th><th>마지막 저장</th><th>최종 제출</th><th>시간표</th><th>관리</th></tr></thead>
         <tbody id="studentRows"></tbody>
       </table>
     </div>
@@ -155,10 +174,58 @@
     <div class="table-scroll"><table class="admin-table"><thead><tr><th>이름</th><th>학번</th><th>유형</th><th>1순위 목표</th><th>전체 배정</th><th>데스크</th></tr></thead><tbody id="studentAssignmentRows"></tbody></table></div>
   </section>
 </section>
+
+<div id="studentScheduleModal" class="schedule-modal-backdrop" aria-hidden="true">
+  <section class="student-schedule-modal" role="dialog" aria-modal="true" aria-labelledby="studentScheduleModalTitle">
+    <header class="student-schedule-modal-head">
+      <div>
+        <div class="student-schedule-title-row">
+          <h2 id="studentScheduleModalTitle">학생 시간표</h2>
+          <span id="studentScheduleState" class="status-pill not_started">미작성</span>
+        </div>
+        <div id="studentScheduleMeta" class="student-schedule-meta"></div>
+      </div>
+      <button id="closeStudentScheduleModal" class="modal-close-button" type="button" aria-label="닫기">×</button>
+    </header>
+    <div class="student-schedule-modal-body">
+      <div class="student-schedule-toolbar-row">
+        <div>
+          <strong>최신 저장 시간표</strong>
+          <p class="muted modal-helper">학생 입력 화면과 같은 상태 색상으로 표시됩니다.</p>
+        </div>
+        <div class="student-schedule-mode-actions">
+          <span id="studentScheduleAccessBadge" class="access-status-badge small">확인 중</span>
+          <button id="adminEditScheduleButton" class="btn secondary small" type="button">관리자 수정</button>
+        </div>
+      </div>
+      <div id="adminScheduleEditor" class="admin-schedule-editor" hidden>
+        <strong>변경할 상태</strong>
+        {% for key, meta in status_meta.items() if key != 'closed' %}
+        <button type="button" class="admin-schedule-brush {% if key == 'first' %}active{% endif %}" data-status="{{ key }}" style="--brush-bg:{{ meta.color }};--brush-text:{{ meta.text }}">{{ meta.label }}</button>
+        {% endfor %}
+        <span>상태를 선택한 뒤 수정할 시간 셀을 클릭하세요.</span>
+      </div>
+      <div class="student-schedule-table-scroll">
+        <table id="studentSchedulePopupTable" class="student-schedule-popup-table"></table>
+      </div>
+    </div>
+    <footer class="student-schedule-modal-foot">
+      <span id="adminScheduleEditNotice" class="muted">학생 입력기간이 종료되면 관리자 수정이 활성화됩니다.</span>
+      <div id="adminScheduleSaveActions" class="admin-schedule-save-actions" hidden>
+        <button id="cancelAdminScheduleEdit" class="btn ghost" type="button">수정 취소</button>
+        <button id="saveAdminScheduleEdit" class="btn primary" type="button">관리자 수정 저장</button>
+      </div>
+    </footer>
+  </section>
+</div>
 {% endblock %}
 {% block scripts %}
 <script>
-window.ADMIN_SCHEDULE_CONFIG = {days: {{ days | tojson }}, hours: {{ hours | tojson }}};
+window.ADMIN_SCHEDULE_CONFIG = {
+  days: {{ days | tojson }},
+  hours: {{ hours | tojson }},
+  statusMeta: {{ status_meta | tojson }}
+};
 </script>
-<script src="/static/admin.js?v=46final"></script>
+<script src="/static/admin.js?v=47"></script>
 {% endblock %}
