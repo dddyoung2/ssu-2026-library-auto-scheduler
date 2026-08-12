@@ -3,6 +3,7 @@
 > ⚠️ v3 (방향 전환): 기존 Streamlit + Supabase(BaaS) + OR-Tools + OpenAI 아키텍처를 폐기하고, 검증된 프로토타입(FastAPI)의 아키텍처를 그대로 채택한다. 관련 문서: `docs/spec.md`(기능 명세), `docs/components.md`(폴더/파일별 책임).
 > ⚠️ v3.1 (`v4_6_final` 반영, 사실상 최종본): DB를 **Supabase PostgreSQL(순수 DB 호스팅)**로 연결하면 구현이 끝나는 단계. Supabase Auth/RLS 등 BaaS 기능은 쓰지 않는다. 그 외 다중 관리자 계정(`app/admin_auth.py` 신설), 학생 개별 등록/수정, 생성 전 readiness 체크가 추가됐다.
 > ⚠️ v3.2 (`lissurary_deploy` 반영): 프로젝트/Render 서비스명이 **`lissurary`**로 확정. 배포는 **Render.com + Supabase**이며 **Streamlit Community Cloud는 사용하지 않는다**(이전에 구두로 언급됐던 "Streamlit 연결"은 이 zip 기준으로 정정됨). `admins.csv` 경로 해석 순서와 Render Secret File 운용 방식이 추가됨(4번 참고).
+> ⚠️ v3.3 (v4.7 반영): 학생 입력기간(시작~마감, `system_settings` 테이블) 하드 게이트와 관리자 대리수정(`schedule_audits` 테이블) 기능 추가. 새 모듈은 없고 기존 `app/database.py`/`app/main.py`에 로직이 추가됨(5·7·8번 참고).
 
 ---
 
@@ -22,7 +23,7 @@
 | DB (운영) | **PostgreSQL — Supabase**(`psycopg` 드라이버). Supabase는 순수 DB 호스팅으로만 사용, Auth/RLS/Storage 등 BaaS 기능은 쓰지 않음 |
 | 인증 | `starlette` `SessionMiddleware` 기반 세션 쿠키. 관리자는 `data/admins.csv` 기반 다중 계정(환경변수는 fallback), 학생은 이름+학번 매칭 |
 | 엑셀 출력 | `openpyxl` |
-| 배포 | Render.com (`render.yaml`, 서비스명 `lissurary`, Singapore 리전, Starter 플랜, `/health` 헬스체크) — 웹 서버만 Render, DB는 Supabase |
+| 배포 | Render.com (`render.yaml`, 서비스명 `lissurary`, Singapore 리전, `/health` 헬스체크) — 웹 서버만 Render, DB는 Supabase. ⚠️ 현재 `plan: free`로 임시 배포 중(3번 참고, 실사용 전 `starter`로 전환 예정) |
 
 **폐기된 스택** (v2 spec에서 목표했던 것): Streamlit, Supabase Auth+RLS(BaaS로서의 Supabase), Google OR-Tools, OpenAI API, 공공데이터포털 공휴일 API. 전부 follow-up으로 이동(`docs/spec.md` 9번 참고). **Supabase 자체는 v3.1에서 순수 Postgres 호스팅으로 부활** — BaaS 기능만 폐기 상태 유지.
 
@@ -90,13 +91,14 @@ app/config.py      (상수: 영업시간, 상태코드, 근로유형 한도, 경
 
 ## 6. 전체 알고리즘 절차
 
-1. 근로생이 이름+학번으로 로그인 → 근로유형(A/B) 선택 → 요일×시간 그리드에서 1~3순위/불가능/수업 입력 → 임시저장 또는 최종 제출
-2. 관리자가 명단 CSV 업로드 또는 더미데이터 생성으로 대상자 확보
-3. 관리자가 시간당 최소 인원을 지정해 **전체 시간표** 생성 — 스왑 휴리스틱(상세는 `docs/spec.md` 6.1)
-4. 관리자가 A/B형 주간·일일 데스크 상한, 2인 허용 시간대를 지정해 **데스크 시간표** 생성 — 직전 전체 시간표를 반드시 입력으로 사용(상세는 `docs/spec.md` 6.2)
-5. 관리자가 결과를 엑셀로 다운로드
+1. 관리자가 명단 CSV 업로드 또는 더미데이터 생성으로 대상자 확보, (선택) 학생 입력기간 설정
+2. 근로생이 입력기간 내에 이름+학번으로 로그인 → 근로유형(A/B) 선택 → 요일×시간 그리드에서 1~3순위/불가능/수업 입력 → 임시저장 또는 최종 제출. 입력기간이 닫혀 있으면 이 단계 전체가 423으로 차단됨
+3. (선택) 입력기간을 잠근 뒤, 관리자가 미제출·오류가 있는 개별 학생의 시간표를 직접 열람하고 대리수정 — 입력기간이 열려 있는 동안엔 학생 본인 입력과 충돌하지 않도록 대리수정이 409로 차단됨(`docs/spec.md` 5.4)
+4. 관리자가 시간당 최소 인원을 지정해 **전체 시간표** 생성 — 스왑 휴리스틱(상세는 `docs/spec.md` 6.1)
+5. 관리자가 A/B형 주간·일일 데스크 상한, 2인 허용 시간대를 지정해 **데스크 시간표** 생성 — 직전 전체 시간표를 반드시 입력으로 사용(상세는 `docs/spec.md` 6.2)
+6. 관리자가 결과를 엑셀로 다운로드
 
-각 생성 요청은 `schedule_runs`에 새 스냅샷으로 저장되며, 화면과 다운로드는 항상 최신 run을 기준으로 한다(과거 run은 DB에는 남지만 UI에서 직접 비교/조회하는 기능은 없음 — follow-up).
+각 생성 요청은 `schedule_runs`에 새 스냅샷으로 저장되며, 화면과 다운로드는 항상 최신 run을 기준으로 한다(과거 run은 DB에는 남지만 UI에서 직접 비교/조회하는 기능은 없음 — follow-up). 스케줄 저장은 주체(학생 본인/관리자)와 무관하게 매번 `schedule_revisions` + `schedule_audits`에 동시 기록되고, `schedule_runs`는 자동 폐기된다.
 
 ---
 
@@ -104,8 +106,8 @@ app/config.py      (상수: 영업시간, 상태코드, 근로유형 한도, 경
 
 | 컴포넌트 | 역할 |
 |---|---|
-| `app/main.py` | 세션 인증, 페이지 라우팅, REST API 엔드포인트, 예외 처리 |
-| `app/database.py` | SQLAlchemy 모델 정의, CSV 동기화, 학생 개별 등록/수정, 스케줄 CRUD, 더미데이터 생성, 생성 readiness 체크, run 저장/조회·무효화 |
+| `app/main.py` | 세션 인증, 페이지 라우팅, REST API 엔드포인트(학생 입력기간 CRUD·관리자 대리수정 포함), 예외 처리 |
+| `app/database.py` | SQLAlchemy 모델 정의(`Student`/`Schedule`/`ScheduleRevision`/`SystemSetting`/`ScheduleAudit`/`ScheduleRun`), CSV 동기화, 학생 개별 등록/수정, 스케줄 CRUD(+ 감사 기록), 학생 입력기간 조회/설정/잠금/해제, 더미데이터 생성, 생성 readiness 체크, run 저장/조회·무효화 |
 | `app/admin_auth.py` | `data/admins.csv` 로딩(로그인마다 재읽기), 환경변수 fallback, 관리자 인증/활성여부 확인 |
 | `app/demo_scheduler.py` | 전체 시간표 스왑 휴리스틱, 데스크 시간표 배정 알고리즘 |
 | `app/validators.py` | 스케줄 정규화, 연속 4시간 검증, 근로유형별 주간 경고 계산 |
@@ -133,6 +135,10 @@ app/config.py      (상수: 영업시간, 상태코드, 근로유형 한도, 경
 | 명단/스케줄 변경 시 `schedule_runs` 자동 폐기 | 오래된 생성 결과가 화면에 남아 있으면 관리자가 최신 명단 기준 결과로 착각할 위험이 있어, 입력이 바뀌면 무조건 재생성을 강제 |
 | 운영 관리자 계정을 **Render Secret File**로 관리 | 로컬 `data/admins.csv`를 그대로 운영에 쓰면 저장소에 실비밀번호가 노출될 위험이 있음. Render Secret File은 저장소와 분리된 별도 채널로 배포되어, 코드는 동일하게 유지하면서(경로만 자동 전환) 운영 비밀값을 안전하게 분리 |
 | Render **Starter 플랜 + Singapore 리전** 선택 | 상시 접속이 필요한 서비스라 유휴 시 꺼지는 무료 인스턴스는 배제. 사용자가 한국이라 지리적으로 가장 가까운 리전(Singapore)으로 지연시간 최소화 |
+| 학생 입력기간을 **테이블 추가 대신 `system_settings` 범용 key-value**로 저장 | 저장할 값이 시작·마감 시각, 수동잠금 여부 3개뿐이라 전용 테이블(컬럼 여러 개)까지는 과함. 나중에 다른 전역 설정이 필요해져도 새 컬럼/마이그레이션 없이 key만 추가하면 되도록 범용 구조로 설계 |
+| 입력기간 값을 **한국시간으로 입력받아 UTC로 저장** | 서버·DB(Supabase)는 UTC 기준으로 동작하는 게 안전하지만, 관리자는 한국시간으로 생각하고 입력함 — 입력/표시 시점에만 `Asia/Seoul` 변환을 적용해 저장은 항상 UTC로 통일 |
+| 감사 로그를 `schedule_revisions`와 **별도로 `schedule_audits` 신설** | `schedule_revisions`는 기존에도 있던 "저장할 때마다 이력 적재" 테이블이지만 누가(학생 본인 vs 관리자) 바꿨는지 구분하는 컬럼이 없었음. 기존 테이블에 컬럼을 추가하는 대신 별도 테이블로 분리해, 기존 `schedule_revisions` 소비 코드(있다면)에 영향 없이 감사 요구사항만 새로 충족 |
+| 관리자 대리수정은 **입력기간이 잠긴 상태에서만** 허용(409로 차단) | 입력기간이 열려 있는 동안 관리자와 학생이 동시에 같은 스케줄을 수정하면 마지막 저장이 상대방 입력을 덮어쓰는 충돌이 생김 — "학생 입력 중엔 관리자 손대지 않음"을 코드로 강제 |
 
 ---
 
@@ -143,7 +149,9 @@ app/config.py      (상수: 영업시간, 상태코드, 근로유형 한도, 경
 - **DB 스키마(`database.py`의 모델) 변경 시**: 로컬 SQLite와 운영 Postgres 양쪽에서 마이그레이션 경로를 확인한다(현재 별도 마이그레이션 도구 없이 `Base.metadata.create_all`만 사용 — 스키마 변경 시 기존 운영 데이터 처리 방안이 follow-up으로 필요).
 - **관리자 인증 변경 시**: `admins.csv`에 비밀번호가 평문으로 저장되는 한계(파일 유출 시 전 계정 노출, 브루트포스 방어 없음)를 인지한다. 공개 저장소에 절대 커밋하지 않도록 `.gitignore` 확인 필수, 운영 서버의 파일 접근 권한도 최소화할 것.
 - **명단 변경 로직(`sync_students`/`create_student`/`update_student`) 변경 시**: `schedule_runs` 자동 폐기(`delete(ScheduleRun)`) 호출이 누락되지 않았는지 확인한다. 누락되면 오래된 생성 결과가 최신인 것처럼 남아있게 된다.
-- **`schedule_generation_readiness()` 변경 시**: 5.3(spec.md)의 생성 전제조건 문구와 `main.py`의 에러 메시지 구성을 함께 갱신한다.
+- **`schedule_generation_readiness()` 변경 시**: 5.5(spec.md)의 생성 전제조건 문구와 `main.py`의 에러 메시지 구성을 함께 갱신한다.
+- **`student_access_status()`/입력기간 관련 함수 변경 시**: 이 값을 참조하는 지점이 여러 곳(`current_student_id`의 423 게이트, 로그인 라우트, 관리자 대리수정의 409 게이트)이라 하나만 고치고 나머지를 누락하기 쉽다. 세 지점 모두 재확인할 것. 시각 비교는 항상 UTC로 정규화한 뒤 비교하는지도 확인(`Asia/Seoul` 변환은 입력·표시 시점에만).
+- **`ScheduleAudit`/`schedule_audits` 관련 변경 시**: `save_student_schedule()`이 `actor_type`/`actor_id`를 누락 없이 넘기는지 확인 — 관리자 대리수정 경로(`api_admin_update_student_schedule`)에서 `actor_type="admin"`을 빼먹으면 감사 로그로 누가 수정했는지 구분할 수 없게 된다.
 
 ---
 
