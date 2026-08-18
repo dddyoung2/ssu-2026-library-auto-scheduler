@@ -6,6 +6,7 @@
 > ⚠️ v3 (방향 전환): 기존 `src/{core,db,pages,utils}` 스캐폴딩(Streamlit 대상)을 폐기하고, 검증된 프로토타입(FastAPI)의 `app/` 구조를 그대로 이식했다.
 > ⚠️ v3.1 (`v4_6_final` 반영): `app/admin_auth.py`, `data/admins.csv` 추가(다중 관리자 계정). DB는 Supabase PostgreSQL(순수 호스팅)로 연결.
 > ⚠️ v3.3 (v4.7 반영): 새 파일은 없음. `app/database.py`/`app/main.py`/`app/static/admin.js`/`app/templates/admin.html`에 학생 입력기간 관리·관리자 대리수정 로직이 추가됨(2번 표 참고).
+> ⚠️ v3.4 (프로젝트 구조 재동기화): 루트에 이미 존재하던 `pytest.ini`/`run_windows.bat`/배포 가이드 문서 2종이 2번 표에서 누락되어 있던 것을 발견해 추가.
 
 ---
 
@@ -41,10 +42,15 @@
 | `data/admins.csv` | 관리자 계정 목록(`user_id,password,active`). 비밀번호 평문 포함 — `.gitignore` 대상, 절대 커밋 금지 |
 | `tests/test_app.py` | FastAPI 엔드포인트 통합 테스트 (입력기간 잠금/해제, 관리자 대리수정 권한, 화면 요소 노출 포함) |
 | `requirements.txt` | 런타임 의존성 (`fastapi`, `sqlalchemy`, `openpyxl` 등) |
-| `requirements-dev.txt` | 테스트/개발 의존성 |
+| `requirements-dev.txt` | 테스트/개발 의존성(`requirements.txt` 상속 + `pytest`) |
+| `pytest.ini` | pytest 설정. `testpaths = tests`로 `scripts/`의 구버전 테스트 스크립트가 함께 수집되지 않도록 제한 |
+| `run_windows.bat` | Windows에서 가상환경 활성화 + 서버 실행을 한 번에 하는 로컬 실행 스크립트 |
 | `render.yaml` | Render.com 배포 설정 |
 | `.env.example` | 필요한 환경 변수 양식 (`DATABASE_URL`, `SESSION_SECRET`, `ADMIN_ID`, `ADMIN_PASSWORD`, `COOKIE_SECURE`) |
+| `supabase/config.toml` | Supabase CLI 로컬 개발 설정(선택 사용) |
 | `supabase/migrations/*.sql` | `app/database.py` 모델과 1:1 대응하는 선택적 DDL(배포 전 Supabase Studio에서 미리 검토·생성하고 싶을 때만 사용) |
+| `LISSURARY_배포가이드.md` | Render+Supabase 실제 배포 절차를 단계별로 정리한 운영 가이드 |
+| `관리자계정_수정방법.txt` | 운영(Render) 환경에서 관리자 계정(`admins.csv`, Secret File)을 수정하는 방법 안내 |
 | `README.md` | 프로젝트 개요, 기능 요약, 기술 스택, 설치/실행 방법 |
 | `CONTRIBUTING.md` | 브랜치/커밋/PR 규칙 |
 | `AGENTS.md` / `CLAUDE.md` | AI 에이전트(Codex / Claude Code) 작업 규칙 |
