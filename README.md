@@ -4,6 +4,7 @@
 > v3 (방향 전환): 기존 Streamlit/Supabase(BaaS)/OR-Tools/OpenAI 계획을 폐기하고, 검증된 프로토타입(FastAPI + SQLite)을 그대로 기반으로 삼는다. 범위도 **전체 시간표 생성 → 데스크 시간표 생성 → 엑셀 다운로드**까지로 축소한다.
 > v3.1 (사실상 최종본): 다중 관리자 계정(`data/admins.csv`), 학생 개별 등록/수정, 생성 전 "전원 제출완료" 체크가 추가됨. DB는 **Supabase PostgreSQL을 순수 DB 호스팅으로 연결**하면 구현 종료(Auth/RLS 미사용). 배포는 **Render.com**(서비스명 `lissurary`, Singapore 리전) — Streamlit Community Cloud는 사용하지 않는다. ⚠️ 현재 `render.yaml`은 결제 없이 기능 검증부터 하려고 `plan: free`로 임시 설정되어 있음(실사용 전 `starter`로 되돌릴 것).
 > v3.3 (v4.7): **학생 입력기간(시작~마감) 관리**와 **관리자의 학생별 시간표 열람/대리수정** 기능이 추가됨. 자세한 내용은 `docs/spec.md`, `docs/architecture.md` 참고.
+> v3.4 (프로젝트 구조 재동기화): 프로젝트 구조 트리에서 누락됐던 `app/admin_auth.py`, `pytest.ini`, `run_windows.bat` 등을 추가하고, CI가 실제로 pytest를 실행하도록 고친 내용(PR #14)을 반영.
 
 ---
 
@@ -73,11 +74,12 @@ ssu-2026-library-auto-scheduler/
 ├── .github/                     # GitHub 설정 및 자동화
 │   ├── pull_request_template.md # PR 템플릿
 │   └── workflows/
-│       └── ci.yml               # CI 워크플로우
+│       └── ci.yml               # CI 워크플로우(의존성 설치 + pytest 실행)
 ├── app/                          # 애플리케이션 코드
 │   ├── main.py                   # FastAPI 라우트/API
 │   ├── config.py                 # 영업시간·상태코드·환경변수 등 상수
 │   ├── database.py               # SQLAlchemy 모델 및 DB 접근
+│   ├── admin_auth.py             # admins.csv 기반 다중 관리자 인증
 │   ├── validators.py             # 스케줄 검증
 │   ├── demo_scheduler.py         # 전체/데스크 시간표 생성 알고리즘
 │   ├── exports.py                # 엑셀 워크북 생성
@@ -90,6 +92,7 @@ ssu-2026-library-auto-scheduler/
 │   ├── spec.md                  # 기능 명세 문서
 │   └── team-tasks.md            # 팀 역할 및 작업 분담 문서
 ├── supabase/
+│   ├── config.toml               # Supabase CLI 로컬 설정
 │   └── migrations/               # app/database.py 모델과 1:1 대응하는 선택적 DDL
 ├── tests/                        # 테스트 코드
 ├── .env.example                 # 환경변수 파일 양식
@@ -98,8 +101,13 @@ ssu-2026-library-auto-scheduler/
 ├── CHANGELOG.md                 # 변경 이력
 ├── CLAUDE.md                    # AI-Agent(Claude Code) 전용 규칙 문서
 ├── CONTRIBUTING.md              # 규칙 규정 파일
+├── LISSURARY_배포가이드.md       # Render+Supabase 배포 절차 가이드
+├── 관리자계정_수정방법.txt        # 운영 관리자 계정(admins.csv) 수정 방법 안내
+├── pytest.ini                   # pytest 설정(testpaths=tests)
 ├── render.yaml                  # Render.com 배포 설정
-├── requirements.txt             # 의존성 파일
+├── requirements.txt             # 런타임 의존성 파일
+├── requirements-dev.txt         # 테스트/개발 의존성 파일
+├── run_windows.bat              # Windows 로컬 실행 스크립트
 └── README.md                    # 프로젝트 개요
 ```
 ---
