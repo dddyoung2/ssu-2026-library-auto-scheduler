@@ -5,8 +5,10 @@ from app.config import (
     EDITABLE_STATUSES,
     HOURS,
     MAX_CONSECUTIVE_AVAILABLE,
+    MAX_DAILY_FIRST_CHOICE_HOURS,
     SATURDAY_ACTIVE_HOURS,
     STATUS_CLOSED,
+    STATUS_FIRST,
     STATUS_UNSELECTED,
     WORK_AVAILABLE_STATUSES,
 )
@@ -56,15 +58,28 @@ def max_consecutive_available(schedule: dict[str, dict[str, str]], day: str) -> 
     return maximum
 
 
+def daily_first_choice_hours(schedule: dict[str, dict[str, str]], day: str) -> int:
+    return sum(1 for hour in HOURS if schedule[day][str(hour)] == STATUS_FIRST)
+
+
 def validate_schedule(payload: object) -> dict[str, dict[str, str]]:
     schedule = normalize_schedule(payload)
-    violations = []
+    consecutive_violations = []
+    daily_hour_violations = []
     for day in DAYS:
         consecutive = max_consecutive_available(schedule, day)
         if consecutive > MAX_CONSECUTIVE_AVAILABLE:
-            violations.append(f"{day}요일에 연속 근무 가능시간이 {consecutive}시간 선택되어 있습니다.")
-    if violations:
-        raise ValueError("최대 연속 근로는 4시간까지 가능합니다. " + " ".join(violations))
+            consecutive_violations.append(f"{day}요일에 연속 근무 가능시간이 {consecutive}시간 선택되어 있습니다.")
+        first_hours = daily_first_choice_hours(schedule, day)
+        if first_hours > MAX_DAILY_FIRST_CHOICE_HOURS:
+            daily_hour_violations.append(f"{day}요일에 1순위 시간이 {first_hours}시간 선택되어 있습니다.")
+    if consecutive_violations:
+        raise ValueError("최대 연속 근로는 4시간까지 가능합니다. " + " ".join(consecutive_violations))
+    if daily_hour_violations:
+        raise ValueError(
+            f"하루 1순위 근로 가능 시간은 최대 {MAX_DAILY_FIRST_CHOICE_HOURS}시간까지 선택할 수 있습니다. "
+            + " ".join(daily_hour_violations)
+        )
     return schedule
 
 

@@ -111,7 +111,7 @@ app/config.py      (상수: 영업시간, 상태코드, 근로유형 한도, 경
 | `app/database.py` | SQLAlchemy 모델 정의(`Student`/`Schedule`/`ScheduleRevision`/`SystemSetting`/`ScheduleAudit`/`ScheduleRun`), CSV 동기화, 학생 개별 등록/수정, 스케줄 CRUD(+ 감사 기록), 학생 입력기간 조회/설정/잠금/해제, 더미데이터 생성, 생성 readiness 체크, run 저장/조회·무효화 |
 | `app/admin_auth.py` | `data/admins.csv` 로딩(로그인마다 재읽기), 환경변수 fallback, 관리자 인증/활성여부 확인 |
 | `app/demo_scheduler.py` | 전체 시간표 스왑 휴리스틱, 데스크 시간표 배정 알고리즘 |
-| `app/validators.py` | 스케줄 정규화, 연속 4시간 검증, 근로유형별 주간 경고 계산 |
+| `app/validators.py` | 스케줄 정규화, 연속 4시간·1순위 하루 8시간 검증, 근로유형별 주간 경고 계산 |
 | `app/exports.py` | `openpyxl` 워크북 생성(4개 시트) |
 | `app/config.py` | 영업시간/요일/상태코드/근로유형 한도 등 전역 상수, 환경변수 로딩 |
 | `templates/`, `static/` | 로그인/학생/관리자 화면, 그리드 드래그 입력 JS |
@@ -145,7 +145,7 @@ app/config.py      (상수: 영업시간, 상태코드, 근로유형 한도, 경
 
 ## 9. 수정 시 주의점
 
-- **`demo_scheduler.py` 알고리즘 변경 시**: 6.3(하드 제약)의 불변식(연속 4시간, 학생별 총 배정시간 유지)이 깨지지 않는지 반드시 재검증한다.
+- **`demo_scheduler.py` 알고리즘 변경 시**: 6.3(하드 제약)의 불변식(연속 4시간, 1순위/스왑 후 하루 8시간, 학생별 총 배정시간 유지)이 깨지지 않는지 반드시 재검증한다. 특히 초기 배정(1순위를 그대로 복사하는 단계)은 `validators.py`의 저장 시점 검증에만 의존하므로, 이 검증을 우회해 DB에 잘못된 데이터가 들어갈 경로(예: 관리자 대리수정 API)가 생기면 하루 8시간 제약이 조용히 깨질 수 있다.
 - **`config.py`의 영업시간/상태코드 변경 시**: `validators.py`(연속시간 계산), `exports.py`(엑셀 그리드 렌더링), `templates/student.html`·`admin.html`(프론트 그리드)까지 함께 확인해야 한다. 하드코딩된 `range(9, 22)`가 `exports.py`에도 별도로 있어 `config.HOURS`와 동기화가 깨지지 않도록 주의.
 - **DB 스키마(`database.py`의 모델) 변경 시**: 로컬 SQLite와 운영 Postgres 양쪽에서 마이그레이션 경로를 확인한다(현재 별도 마이그레이션 도구 없이 `Base.metadata.create_all`만 사용 — 스키마 변경 시 기존 운영 데이터 처리 방안이 follow-up으로 필요).
 - **관리자 인증 변경 시**: `admins.csv`에 비밀번호가 평문으로 저장되는 한계(파일 유출 시 전 계정 노출, 브루트포스 방어 없음)를 인지한다. 공개 저장소에 절대 커밋하지 않도록 `.gitignore` 확인 필수, 운영 서버의 파일 접근 권한도 최소화할 것.

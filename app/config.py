@@ -40,6 +40,10 @@ EDITABLE_STATUSES = {
 }
 WORK_AVAILABLE_STATUSES = {STATUS_FIRST, STATUS_SECOND, STATUS_THIRD}
 MAX_CONSECUTIVE_AVAILABLE = 4
+# 1순위는 검증 없이 그대로 전체 시간표 초기 배정에 쓰이므로(demo_scheduler.generate_full_schedule),
+# 하루 최대 근무 8시간 규정을 지키려면 저장 시점에 1순위 시간을 여기서 막아야 한다.
+# 2·3순위는 스왑을 통해서만 배정되며, 그 시점의 8시간 체크(valid_after_swap)로 별도 보장된다.
+MAX_DAILY_FIRST_CHOICE_HOURS = 8
 
 # 근로유형별 월/주 권장 범위.
 # 주 기준은 학교에서 월 최소·최대 시간을 4주로 나누어 시간표 작성 시 안내하는 값이며,
