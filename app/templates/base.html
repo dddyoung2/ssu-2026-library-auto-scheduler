@@ -4,15 +4,28 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>{{ title }}</title>
-  <link rel="stylesheet" href="/static/style.css?v=50">
+  <link rel="stylesheet" href="/static/style.css?v=51">
 </head>
 <body>
   <header class="topbar">
-    <div class="brand"><span class="brand-icon">▦</span><span>{{ title }}</span></div>
+    <div class="brand">
+      <span class="brand-logo-frame">
+        <img
+          class="brand-library-logo"
+          src="/static/soongsil_library_logo.png"
+          alt="숭실대학교 도서관 로고"
+        >
+      </span>
+      <span class="brand-name">Lissurary</span>
+    </div>
+
     {% block header_actions %}{% endblock %}
   </header>
+
   <main class="page">{% block content %}{% endblock %}</main>
+
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
   {% block scripts %}{% endblock %}
 </body>
 </html>
