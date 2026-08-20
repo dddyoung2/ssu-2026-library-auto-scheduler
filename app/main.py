@@ -416,7 +416,15 @@ async def api_import_users(
     if len(content) > 2_000_000:
         raise HTTPException(status_code=400, detail="파일이 너무 큽니다.")
     try:
-        text = content.decode("utf-8-sig")
+        try:
+            text = content.decode("utf-8-sig")
+        except UnicodeDecodeError:
+            try:
+                text = content.decode("cp949")
+            except UnicodeDecodeError as exc:
+                raise ValueError(
+                    "CSV 파일 인코딩을 확인해 주세요. UTF-8 또는 Excel 한글 CSV 형식을 지원합니다."
+                ) from exc
         reader = csv.DictReader(io.StringIO(text))
         required = {"name", "student_no", "work_type", "active"}
         if not reader.fieldnames or not required.issubset({field.strip() for field in reader.fieldnames if field}):
