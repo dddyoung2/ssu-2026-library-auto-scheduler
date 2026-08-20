@@ -191,7 +191,7 @@ ADMIN2_PASSWORD=
 2. Render → `New` → `Blueprint` → 저장소의 `render.yaml` 선택 → `DATABASE_URL`에 Supabase 연결 문자열 입력 → 배포(앱 기동 시 테이블 자동 생성)
 3. Render 서비스 → `Environment` → `Secret Files` → 파일명 `admins.csv`로 관리자 계정 등록
 4. 배포 후 `/health` 확인 → 관리자 로그인 → 학생 등록(개별 또는 CSV) → 학생 로그인/제출 테스트 → 더미 40명으로 자동배정 테스트
-5. Supabase Free 플랜은 장기간 미사용 시 프로젝트가 일시정지될 수 있으므로, 상시 접속이 필요하면 유료 플랜 고려
+5. Supabase Free 플랜은 장기간 미사용 시 프로젝트가 일시 정지될 수 있으므로, 상시 접속이 필요하면 유료 플랜 고려
 
 ---
 
