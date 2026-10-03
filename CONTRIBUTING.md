@@ -7,12 +7,12 @@
 2. 한 작업 = 한 브랜치 = 한 PR
 3. 항상 최신 `main`에서 새 브랜치 생성
 4. 본인 브랜치만 push
-5. 시크릿 파일, 개인정보, 대용량 모델 파일 commit 금지
+**5. 시크릿 파일, 개인정보, 대용량 모델 파일 commit 금지**
 6. PR 전 테스트 결과 확인
 
 ## Branch & Commit Message 네이밍
-**Branch 권장 형식:** `<type>/<short-description>`
-**Commit Message 권장 형식:** 
+**Branch 권장 형식:** `<type>/<short-description>`  
+**Commit Message 권장 형식:**
 `<type>(<scope>): <summary>`
 `<body>`
 
